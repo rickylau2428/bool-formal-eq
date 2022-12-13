@@ -1,49 +1,88 @@
+use std::collections::VecDeque;
+
 pub struct Expr {
     num_vars: u32,
     pub tokens: Vec<Token>,
+    pub RPN: Vec<Token>
 //    pub AST:
 }
 
-#[derive(Debug)]
-#[derive(PartialEq)]
+#[derive(Debug, PartialEq, Copy, Clone)]
 pub enum Token {
     VAR(char),
     AND,
     OR,
     XOR,
     NOT,
-    L_PAREN,
-    R_PAREN
+    LParen,
+    RParen
 }
 
 impl Expr {
+    fn new() -> Expr {
+        Expr {
+            num_vars: 0,
+            tokens: Vec::new(),
+            RPN: Vec::new()
+        }
+    }
+
     pub fn build_expr(input: String) -> Result<Expr, &'static str> {
+        let mut expression = Expr::new();
+
+        expression.parse_input(input)?;
+        expression.convert_rpn();
+
+        Ok(expression)
+    }
+
+
+    fn parse_input(&mut self, input: String) -> Result<(), &'static str> {
         if input.len() == 0 { return Err("Input string was empty."); }
-        let mut parsed: Vec<Token> = Vec::new();
-        let mut num_vars: u32 = 0;
 
         for c in input.chars() {
             match c {
                 ' ' => continue,
-                '&' => parsed.push(Token::AND),
-                '|' => parsed.push(Token::OR),
-                '^' => parsed.push(Token::XOR),
-                '!' | '~' => parsed.push(Token::NOT),
-                '(' => parsed.push(Token::L_PAREN),
-                ')' => parsed.push(Token::R_PAREN),
+                '&' => self.tokens.push(Token::AND),
+                '|' => self.tokens.push(Token::OR),
+                '^' => self.tokens.push(Token::XOR),
+                '!' | '~' => self.tokens.push(Token::NOT),
+                '(' => self.tokens.push(Token::LParen),
+                ')' => self.tokens.push(Token::RParen),
                 _   => {
-                    parsed.push(Token::VAR(c));
-                    num_vars += 1;
+                    self.tokens.push(Token::VAR(c));
+                    self.num_vars += 1;
                 }
             }
         }
 
-        Ok(Expr {num_vars, tokens: parsed})
+        Ok(()) 
+    }
+    fn convert_rpn(&mut self) {
+        let mut ops: VecDeque<Token> = VecDeque::new();
+
+        for token in self.tokens.iter() {
+            match token {
+                Token::VAR(_) => self.RPN.push(*token),
+                Token::LParen => ops.push_back(*token),
+                Token::RParen => {
+                    loop {
+                        let top = ops.pop_back().unwrap(); 
+                        if top == Token::LParen { break; }
+                        self.RPN.push(top);
+                    }
+                },
+                _ => ops.push_back(*token)
+            }
+        }
+
+        while ops.len() != 0 {
+            self.RPN.push(ops.pop_front().unwrap());
+        }
     }
 
-    fn convert_rpn(mut tokens: Vec<Token>) -> Vec<Token> {
-        tokens
-    }
+        
+
 }
 
 #[cfg(test)]
@@ -56,9 +95,33 @@ mod test {
     }
 
     #[test]
-    fn simple_test() {
+    fn simple_parse_test() {
         let expected: Vec<Token>  = vec![Token::VAR('a'), Token::AND, Token::VAR('b')];
+        let expression = Expr::build_expr(String::from("a & b")).unwrap();
 
-        assert_eq!(Expr::build_expr(String::from("a & b")).unwrap().parsed, expected);
+        assert_eq!(expression.tokens, expected);
     }
+
+    #[test]
+    fn simple_rpn_test() {
+        let expected: Vec<Token> = vec![Token::VAR('a'), Token::VAR('b'), Token::AND];
+        let expression = Expr::build_expr(String::from("a & b")).unwrap();
+
+        assert_eq!(expression.RPN, expected);
+    }
+
+    #[test]
+    fn complex_build_test() {
+        let input = String::from("((a ^ b) & ~(c & d)) | e");
+        let parse_expected: Vec<Token> = vec![Token::LParen, Token::LParen, Token::VAR('a'), Token::XOR, Token::VAR('b'),
+        Token::RParen, Token::AND, Token::NOT, Token::LParen, Token::VAR('c'), Token::AND, Token::VAR('d'), Token::RParen, Token::RParen, Token::OR, Token::VAR('e')];
+        let rpn_expected: Vec<Token> = vec![Token::VAR('a'), Token::VAR('b'), Token::XOR, Token::VAR('c'), Token::VAR('d'), Token::AND, 
+        Token::NOT, Token::AND, Token::VAR('e'), Token::OR];
+        
+        let expression = Expr::build_expr(input).unwrap();
+
+        assert_eq!(expression.tokens, parse_expected);
+        assert_eq!(expression.RPN, rpn_expected);
+    }
+
 }
