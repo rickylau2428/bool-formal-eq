@@ -7,16 +7,21 @@ pub struct Expr {
 //    pub AST:
 }
 
-#[derive(Debug, PartialEq, Copy, Clone)]
+#[derive(Debug, Copy, Clone, PartialEq)]
 #[allow(dead_code)]
 pub enum Token {
     VAR(char),
+    OP(Operator),
+    LParen,
+    RParen
+}
+
+#[derive(Debug, Copy, Clone, PartialEq)]
+pub enum Operator {
     AND,
     OR,
     XOR,
-    NOT,
-    LParen,
-    RParen
+    NOT
 }
 
 impl Expr {
@@ -43,10 +48,10 @@ impl Expr {
         for c in input.chars() {
             match c {
                 ' ' => continue,
-                '&' => self.tokens.push(Token::AND),
-                '|' => self.tokens.push(Token::OR),
-                '^' => self.tokens.push(Token::XOR),
-                '!' | '~' => self.tokens.push(Token::NOT),
+                '&' => self.tokens.push(Token::OP(Operator::AND)),
+                '|' => self.tokens.push(Token::OP(Operator::OR)),
+                '^' => self.tokens.push(Token::OP(Operator::XOR)),
+                '!' | '~' => self.tokens.push(Token::OP(Operator::NOT)),
                 '(' => self.tokens.push(Token::LParen),
                 ')' => self.tokens.push(Token::RParen),
                 _   => {
@@ -94,8 +99,8 @@ mod test {
 
     #[test]
     fn simple_parse_test() {
-        let parse_expected: Vec<Token>  = vec![Token::VAR('a'), Token::AND, Token::VAR('b')];
-        let rpn_expected: Vec<Token> = vec![Token::VAR('a'), Token::VAR('b'), Token::AND];
+        let parse_expected: Vec<Token>  = vec![Token::VAR('a'), Token::OP(Operator::AND), Token::VAR('b')];
+        let rpn_expected: Vec<Token> = vec![Token::VAR('a'), Token::VAR('b'), Token::OP(Operator::AND)];
         let expression = Expr::build_expr(String::from("a & b")).unwrap();
 
         assert_eq!(expression.tokens, parse_expected);
@@ -105,10 +110,10 @@ mod test {
     #[test]
     fn complex_build_test() {
         let input = String::from("((a ^ b) & ~(c & d)) | e");
-        let parse_expected: Vec<Token> = vec![Token::LParen, Token::LParen, Token::VAR('a'), Token::XOR, Token::VAR('b'),
-        Token::RParen, Token::AND, Token::NOT, Token::LParen, Token::VAR('c'), Token::AND, Token::VAR('d'), Token::RParen, Token::RParen, Token::OR, Token::VAR('e')];
-        let rpn_expected: Vec<Token> = vec![Token::VAR('a'), Token::VAR('b'), Token::XOR, Token::VAR('c'), Token::VAR('d'), Token::AND, 
-        Token::NOT, Token::AND, Token::VAR('e'), Token::OR];
+        let parse_expected: Vec<Token> = vec![Token::LParen, Token::LParen, Token::VAR('a'), Token::OP(Operator::XOR), Token::VAR('b'),
+        Token::RParen, Token::OP(Operator::AND), Token::OP(Operator::NOT), Token::LParen, Token::VAR('c'), Token::OP(Operator::AND), Token::VAR('d'), Token::RParen, Token::RParen, Token::OP(Operator::OR), Token::VAR('e')];
+        let rpn_expected: Vec<Token> = vec![Token::VAR('a'), Token::VAR('b'), Token::OP(Operator::XOR), Token::VAR('c'), Token::VAR('d'), Token::OP(Operator::AND), 
+        Token::OP(Operator::NOT), Token::OP(Operator::AND), Token::VAR('e'), Token::OP(Operator::OR)];
         
         let expression = Expr::build_expr(input).unwrap();
 

@@ -2,6 +2,7 @@ use std::io;
 use std::io::*;
 
 mod parser;
+mod ast;
 
 fn main() {
     let input1 = get_user_input();
