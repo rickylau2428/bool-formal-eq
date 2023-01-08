@@ -3,12 +3,14 @@ use crate::parser::{Token, Operator};
 
 type ChildNode = Option<Box<Node>>;
 
+#[derive(Debug)]
 pub struct Node {
     value: Token,
     left: ChildNode,
     right: ChildNode
 }
 
+#[derive(Debug)]
 pub struct ExprAst {
     pub root: ChildNode
 }
@@ -26,8 +28,8 @@ impl Node {
         Self::new(Token::OP(op), left, right)
     }
 
-    pub fn UnaryOpNode(op: Operator, left: ChildNode) -> Self {
-        Self::new(Token::OP(op), left, None)
+    pub fn UnaryOpNode(op: Operator, child: ChildNode) -> Self {
+        Self::new(Token::OP(op), child, None)
     }
 
     pub fn VarNode(name: char) -> Self {
@@ -42,7 +44,7 @@ impl Node {
 
 impl PartialEq for Node {
     fn eq(&self, other: &Self) -> bool {
-        self.value == self.value
+        self.value == other.value && self.left.eq(&other.left) && self.right.eq(&other.right)
     }
 }
 
@@ -62,12 +64,12 @@ impl ExprAst {
                 parser::Token::RParen => {
                     while let Some(Token::OP(o)) = op_stack.pop() {
                         if *o == Operator::NOT {
-                            let child = node_stack.pop().unwrap();
-                            node_stack.push(Box::new(Node::UnaryOpNode(o, child)));
+                            let child = node_stack.pop();
+                            node_stack.push(Box::new(Node::UnaryOpNode(*o, child)));
                         } else {
-                            let leftChild = node_stack.pop().unwrap();
-                            let rightChild = node_stack.pop().unwrap();
-                            node_stack.push(Box::new(Node::BinOpNode(o, leftChild, rightChild)));
+                            let left_child = node_stack.pop();
+                            let right_child = node_stack.pop();
+                            node_stack.push(Box::new(Node::BinOpNode(*o, left_child, right_child)));
                         }
                     }
                 }
@@ -85,15 +87,15 @@ impl ExprAst {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::parser::{Token, Operator};
+    use crate::parser;
 
-    fn compare_ast(rootA: &ChildNode, rootB: &ChildNode) -> bool {
-        if (rootA == None && rootB == None) {
-            true
+    fn compare_ast(root_a: ChildNode, root_b: ChildNode) -> bool {
+        if root_a == None && root_b == None {
+           return true
         }
 
-        if let (Some(nodeA), Some(nodeB)) = (rootA, rootB) {
-            (nodeA == nodeB) && compare_ast(nodeA.left, nodeB.left) && compare_ast(nodeA.right, nodeB.right)
+        if let (Some(node_a), Some(node_b)) = (root_a, root_b) {
+            return (node_a == node_b) && compare_ast(node_a.left, node_b.left) && compare_ast(node_a.right, node_b.right)
         }
 
         false
@@ -102,8 +104,29 @@ mod test {
     
     #[test]
     fn simple_test() {
-        let expr = vec![VAR('a'), OP(AND), VAR('b')];
-        let expected = Some(Node::BinOpNode(AND, Node::VarNode('b'), Node::VarNode('a')));
-        assert_eq!(ExprAst::build(expr), expected);
+        let expr = parser::Expr::build_expr(String::from("a & b")).unwrap();
+        let expected = ExprAst {
+            root: Some(Box::new(Node::BinOpNode(Operator::AND,
+                                             Some(Box::new(Node::VarNode('b'))), 
+                                            Some(Box::new(Node::VarNode('a'))))))
+        };
+        compare_ast(ExprAst::build(&expr).root, expected.root);
     }
+
+    #[test]
+    fn complex_test() {
+        let expr = parser::Expr::build_expr(String::from("a ^ (b & ~(c | d))")).unwrap();
+        let expected = ExprAst {
+            root: 
+            Some(Box::new(Node::BinOpNode(Operator::XOR,
+                Some(Box::new(Node::BinOpNode(Operator::AND,
+                    Some(Box::new(Node::UnaryOpNode(Operator::NOT, 
+                        Some(Box::new(Node::BinOpNode(Operator::OR,
+                            Some(Box::new(Node::VarNode('d'))),
+                           Some(Box::new(Node::VarNode('c'))))))))),
+                   Some(Box::new(Node::VarNode('b')))))),
+                   Some(Box::new(Node::VarNode('a'))))))
+        };
+        compare_ast(ExprAst::build(&expr).root, expected.root);
+    } 
 }
