@@ -1,7 +1,8 @@
 use std::collections::{VecDeque, HashMap};
 
+#[derive(Debug)]
 pub struct Expr {
-    num_vars: usize,
+    pub num_vars: usize,
     pub tokens: Vec<Token>,
     pub rpn: Vec<Token>
 //    pub AST:
@@ -31,6 +32,10 @@ impl Expr {
             tokens: Vec::new(),
             rpn: Vec::new()
         }
+    }
+
+    pub fn get_num_vars(&self) -> usize {
+        self.num_vars
     }
 
     pub fn build_expr(input: String) -> Result<Expr, &'static str> {
@@ -107,6 +112,7 @@ mod test {
         let rpn_expected: Vec<Token> = vec![Token::VAR(0), Token::VAR(1), Token::OP(Operator::AND)];
         let expression = Expr::build_expr(String::from("a & b")).unwrap();
 
+        assert_eq!(expression.get_num_vars(), 2);
         assert_eq!(expression.tokens, parse_expected);
         assert_eq!(expression.rpn, rpn_expected);
     }

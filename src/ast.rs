@@ -70,31 +70,84 @@ impl ExprAst {
 
         for token in expression.tokens.iter() {
             match token {
-                parser::Token::VAR(name) => {
-                    let leaf_node = Node::var_node(*name);
+                parser::Token::VAR(ndx) => {
+                    let leaf_node = Node::var_node(*ndx);
                     node_stack.push(Box::new(leaf_node));
                 }
                 parser::Token::RParen => {
-                    while let Some(Token::OP(o)) = op_stack.pop() {
+                    Self::build_helper_paren(&mut op_stack, &mut node_stack);
+                    // while let Some(Token::OP(o)) = op_stack.pop() {
+                    //     if *o == Operator::NOT {
+                    //         let child = node_stack.pop();
+                    //         node_stack.push(Box::new(Node::unary_op_node(*o, child)));
+                    //     } else {
+                    //         println!("Prior state of stack: {:?}", node_stack);
+                    //         let left_child = node_stack.pop();
+                    //         let right_child = node_stack.pop();
+                    //         println!("Current state of stack: {:?}", node_stack);
+                    //         node_stack.push(Box::new(Node::bin_op_node(*o, left_child, right_child)));
+                    //     }
+                    // }
+                }
+                _ => 
+                {
+                    while let Some(Token::OP(o)) = op_stack.last() {
                         if *o == Operator::NOT {
+                            println!("Prior state of stack: {:?}", node_stack);
+                            op_stack.pop();
                             let child = node_stack.pop();
                             node_stack.push(Box::new(Node::unary_op_node(*o, child)));
+                            println!("Current state of stack: {:?}", node_stack);
                         } else {
-                            let left_child = node_stack.pop();
-                            let right_child = node_stack.pop();
-                            node_stack.push(Box::new(Node::bin_op_node(*o, left_child, right_child)));
+                            break;
                         }
                     }
+                    op_stack.push(token);
                 }
-                _ => op_stack.push(token)
             }
         }
+
+        if !op_stack.is_empty() {
+            Self::build_helper_paren(&mut op_stack, &mut node_stack);
+        }
+        // dbg!(&node_stack);
 
         let root = node_stack.pop();
         ExprAst {
             root
         }
     }
+
+    fn build_helper_paren(op_stack: &mut Vec<&parser::Token>, node_stack: &mut Vec<Box<Node>>) {
+        while let Some(Token::OP(o)) = op_stack.pop() {
+            if *o == Operator::NOT {
+                // println!("Prior state of stack: {:?}", node_stack);
+                let child = node_stack.pop();
+                node_stack.push(Box::new(Node::unary_op_node(*o, child)));
+                // println!("Current state of stack: {:?}", node_stack);
+            } else {
+                // println!("Prior state of stack: {:?}", node_stack);
+                let left_child = node_stack.pop();
+                let right_child = node_stack.pop();
+                node_stack.push(Box::new(Node::bin_op_node(*o, left_child, right_child)));
+                // println!("Current state of stack: {:?}", node_stack);
+            }
+        }
+    }
+
+    // fn build_helper_op<'a>(op_stack: &'a mut Vec<&parser::Token>, node_stack: &mut Vec<Box<Node>>, token: &'a Token) {
+    //     while let Some(Token::OP(o)) = op_stack.iter().next() {
+    //         if *o == Operator::NOT {
+    //             println!("Prior state of stack: {:?}", node_stack);
+    //             op_stack.pop();
+    //             let child = node_stack.pop();
+    //             node_stack.push(Box::new(Node::unary_op_node(*o, child)));
+    //             println!("Current state of stack: {:?}", node_stack);
+    //         } else {
+    //             op_stack.push(token);
+    //         }
+    //     }
+    // }
 
     pub fn evaluate(&self, values: &Vec<bool>) -> bool {
         if let Some(root) = &self.root {
@@ -131,7 +184,7 @@ mod test {
                                              Some(Box::new(Node::var_node(1))), 
                                             Some(Box::new(Node::var_node(0))))))
         };
-        compare_ast(ExprAst::build(&expr).root, expected.root);
+        assert!(compare_ast(ExprAst::build(&expr).root, expected.root))
     }
 
     #[test]
@@ -148,7 +201,7 @@ mod test {
                    Some(Box::new(Node::var_node(1)))))),
                Some(Box::new(Node::var_node(0))))))
         };
-        compare_ast(ExprAst::build(&expr).root, expected.root);
+        assert!(compare_ast(ExprAst::build(&expr).root, expected.root))
     } 
 
     #[test]
@@ -202,5 +255,41 @@ mod test {
         let expr = parser::Expr::build_expr(String::from("(a & (b ^ ~(a | c))) & b")).unwrap();
         let test_tree = ExprAst::build(&expr);
         assert!(test_tree.evaluate(&vec![true, true, false]))
+    }
+
+    #[test]
+    fn test_fail() {
+        let expr = parser::Expr {
+            num_vars: 2,
+            tokens: vec![Token::VAR(0), Token::OP(Operator::AND), Token::VAR(1)],
+            rpn: vec![]
+        };
+        let test_tree = ExprAst::build(&expr);
+        let expected = ExprAst {
+            root: Some(Box::new(Node::bin_op_node(Operator::AND, 
+                Some(Box::new(Node::var_node(1))), 
+                Some(Box::new(Node::var_node(0))))))
+        };
+
+        assert!(compare_ast(test_tree.root, expected.root))
+    }
+
+    #[test]
+    fn test_fail_2() {
+        let expr = parser::Expr {
+            num_vars: 2,
+            tokens: vec![Token::OP(Operator::NOT), Token::VAR(0), Token::OP(Operator::AND), Token::OP(Operator::NOT), Token::VAR(1)],
+            rpn: vec![]
+        };
+        let test_tree = ExprAst::build(&expr);
+        let expected = ExprAst {
+            root: Some(Box::new(Node::bin_op_node(Operator::AND,
+                Some(Box::new(Node::unary_op_node(Operator::NOT, 
+                    Some(Box::new(Node::var_node(1)))))),
+                Some(Box::new(Node::unary_op_node(Operator::NOT, 
+                    Some(Box::new(Node::var_node(0)))))))))
+        };
+        assert!(compare_ast(test_tree.root, expected.root))
+        
     }
 }
