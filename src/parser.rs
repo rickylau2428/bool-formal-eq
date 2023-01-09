@@ -1,7 +1,7 @@
-use std::collections::VecDeque;
+use std::collections::{VecDeque, HashMap};
 
 pub struct Expr {
-    num_vars: u32,
+    num_vars: usize,
     pub tokens: Vec<Token>,
     pub rpn: Vec<Token>
 //    pub AST:
@@ -10,7 +10,7 @@ pub struct Expr {
 #[derive(Debug, Copy, Clone, PartialEq)]
 #[allow(dead_code)]
 pub enum Token {
-    VAR(char),
+    VAR(usize),
     OP(Operator),
     LParen,
     RParen
@@ -44,6 +44,7 @@ impl Expr {
 
     fn parse_input(&mut self, input: String) -> Result<(), &'static str> {
         if input.len() == 0 { return Err("Input string was empty."); }
+        let mut vars: HashMap<char, usize> = HashMap::new();
 
         for c in input.chars() {
             match c {
@@ -55,8 +56,11 @@ impl Expr {
                 '(' => self.tokens.push(Token::LParen),
                 ')' => self.tokens.push(Token::RParen),
                 _   => {
-                    self.tokens.push(Token::VAR(c));
-                    self.num_vars += 1;
+                    if !vars.contains_key(&c) {
+                        vars.insert(c, self.num_vars);
+                        self.num_vars += 1; 
+                    }
+                    self.tokens.push(Token::VAR(*vars.get(&c).unwrap()))
                 }
             }
         }
@@ -99,8 +103,8 @@ mod test {
 
     #[test]
     fn simple_parse_test() {
-        let parse_expected: Vec<Token>  = vec![Token::VAR('a'), Token::OP(Operator::AND), Token::VAR('b')];
-        let rpn_expected: Vec<Token> = vec![Token::VAR('a'), Token::VAR('b'), Token::OP(Operator::AND)];
+        let parse_expected: Vec<Token>  = vec![Token::VAR(0), Token::OP(Operator::AND), Token::VAR(1)];
+        let rpn_expected: Vec<Token> = vec![Token::VAR(0), Token::VAR(1), Token::OP(Operator::AND)];
         let expression = Expr::build_expr(String::from("a & b")).unwrap();
 
         assert_eq!(expression.tokens, parse_expected);
@@ -110,10 +114,10 @@ mod test {
     #[test]
     fn complex_build_test() {
         let input = String::from("((a ^ b) & ~(c & d)) | e");
-        let parse_expected: Vec<Token> = vec![Token::LParen, Token::LParen, Token::VAR('a'), Token::OP(Operator::XOR), Token::VAR('b'),
-        Token::RParen, Token::OP(Operator::AND), Token::OP(Operator::NOT), Token::LParen, Token::VAR('c'), Token::OP(Operator::AND), Token::VAR('d'), Token::RParen, Token::RParen, Token::OP(Operator::OR), Token::VAR('e')];
-        let rpn_expected: Vec<Token> = vec![Token::VAR('a'), Token::VAR('b'), Token::OP(Operator::XOR), Token::VAR('c'), Token::VAR('d'), Token::OP(Operator::AND), 
-        Token::OP(Operator::NOT), Token::OP(Operator::AND), Token::VAR('e'), Token::OP(Operator::OR)];
+        let parse_expected: Vec<Token> = vec![Token::LParen, Token::LParen, Token::VAR(0), Token::OP(Operator::XOR), Token::VAR(1),
+        Token::RParen, Token::OP(Operator::AND), Token::OP(Operator::NOT), Token::LParen, Token::VAR(2), Token::OP(Operator::AND), Token::VAR(3), Token::RParen, Token::RParen, Token::OP(Operator::OR), Token::VAR(4)];
+        let rpn_expected: Vec<Token> = vec![Token::VAR(0), Token::VAR(1), Token::OP(Operator::XOR), Token::VAR(2), Token::VAR(3), Token::OP(Operator::AND), 
+        Token::OP(Operator::NOT), Token::OP(Operator::AND), Token::VAR(4), Token::OP(Operator::OR)];
         
         let expression = Expr::build_expr(input).unwrap();
 

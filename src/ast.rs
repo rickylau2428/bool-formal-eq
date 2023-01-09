@@ -24,20 +24,33 @@ impl Node {
         }
     }
 
-    pub fn BinOpNode(op: Operator, left: ChildNode, right: ChildNode) -> Self {
+    pub fn bin_op_node(op: Operator, left: ChildNode, right: ChildNode) -> Self {
         Self::new(Token::OP(op), left, right)
     }
 
-    pub fn UnaryOpNode(op: Operator, child: ChildNode) -> Self {
+    pub fn unary_op_node(op: Operator, child: ChildNode) -> Self {
         Self::new(Token::OP(op), child, None)
     }
 
-    pub fn VarNode(name: char) -> Self {
-        Self::new(Token::VAR(name), None, None)
+    pub fn var_node(ndx: usize) -> Self {
+        Self::new(Token::VAR(ndx), None, None)
     }
 
     pub fn get_value(&self) -> parser::Token {
         self.value
+    }
+
+    fn evaluate(&self, values: &Vec<bool>) -> bool {
+        match self.value {
+            Token::VAR(ndx) => return values[ndx],
+            Token::OP(o) => match o {
+                Operator::AND => return self.left.as_ref().expect("Left operand empty").evaluate(values) && self.right.as_ref().expect("Right operand empty").evaluate(values),
+                Operator::OR => return self.left.as_ref().expect("Left operand empty").evaluate(values) || self.right.as_ref().expect("Right operand empty").evaluate(values),
+                Operator::XOR => return self.left.as_ref().expect("left operand empty").evaluate(values) ^ self.right.as_ref().expect("Right operand empty").evaluate(values),
+                Operator::NOT => return !self.left.as_ref().expect("child empty").evaluate(values),
+            },
+            _ => panic!("Should not occur")
+        }
     }
 
 }
@@ -58,18 +71,18 @@ impl ExprAst {
         for token in expression.tokens.iter() {
             match token {
                 parser::Token::VAR(name) => {
-                    let leaf_node = Node::VarNode(*name);
+                    let leaf_node = Node::var_node(*name);
                     node_stack.push(Box::new(leaf_node));
                 }
                 parser::Token::RParen => {
                     while let Some(Token::OP(o)) = op_stack.pop() {
                         if *o == Operator::NOT {
                             let child = node_stack.pop();
-                            node_stack.push(Box::new(Node::UnaryOpNode(*o, child)));
+                            node_stack.push(Box::new(Node::unary_op_node(*o, child)));
                         } else {
                             let left_child = node_stack.pop();
                             let right_child = node_stack.pop();
-                            node_stack.push(Box::new(Node::BinOpNode(*o, left_child, right_child)));
+                            node_stack.push(Box::new(Node::bin_op_node(*o, left_child, right_child)));
                         }
                     }
                 }
@@ -82,6 +95,15 @@ impl ExprAst {
             root
         }
     }
+
+    pub fn evaluate(&self, values: &Vec<bool>) -> bool {
+        if let Some(root) = &self.root {
+            return root.evaluate(values)
+        } else {
+            return false;
+        }
+    }
+
 }
 
 #[cfg(test)]
@@ -99,16 +121,15 @@ mod test {
         }
 
         false
-
     }
     
     #[test]
     fn simple_test() {
         let expr = parser::Expr::build_expr(String::from("a & b")).unwrap();
         let expected = ExprAst {
-            root: Some(Box::new(Node::BinOpNode(Operator::AND,
-                                             Some(Box::new(Node::VarNode('b'))), 
-                                            Some(Box::new(Node::VarNode('a'))))))
+            root: Some(Box::new(Node::bin_op_node(Operator::AND,
+                                             Some(Box::new(Node::var_node(1))), 
+                                            Some(Box::new(Node::var_node(0))))))
         };
         compare_ast(ExprAst::build(&expr).root, expected.root);
     }
@@ -118,15 +139,68 @@ mod test {
         let expr = parser::Expr::build_expr(String::from("a ^ (b & ~(c | d))")).unwrap();
         let expected = ExprAst {
             root: 
-            Some(Box::new(Node::BinOpNode(Operator::XOR,
-                Some(Box::new(Node::BinOpNode(Operator::AND,
-                    Some(Box::new(Node::UnaryOpNode(Operator::NOT, 
-                        Some(Box::new(Node::BinOpNode(Operator::OR,
-                            Some(Box::new(Node::VarNode('d'))),
-                           Some(Box::new(Node::VarNode('c'))))))))),
-                   Some(Box::new(Node::VarNode('b')))))),
-                   Some(Box::new(Node::VarNode('a'))))))
+            Some(Box::new(Node::bin_op_node(Operator::XOR,
+                Some(Box::new(Node::bin_op_node(Operator::AND,
+                    Some(Box::new(Node::unary_op_node(Operator::NOT, 
+                        Some(Box::new(Node::bin_op_node(Operator::OR,
+                            Some(Box::new(Node::var_node(3))),
+                           Some(Box::new(Node::var_node(2))))))))),
+                   Some(Box::new(Node::var_node(1)))))),
+               Some(Box::new(Node::var_node(0))))))
         };
         compare_ast(ExprAst::build(&expr).root, expected.root);
     } 
+
+    #[test]
+    fn empty_eval_test() {
+        let test_tree = ExprAst {
+            root: None
+        };
+        assert!(!test_tree.evaluate(&vec![true, true, false]))
+    } 
+    
+    #[test]
+    fn single_eval_test() {
+        let test_tree = ExprAst {
+            root: Some(Box::new(Node::var_node(1)))
+        };
+        assert!(test_tree.evaluate(&vec![false, true, false]))
+    }
+
+    #[test]
+    fn simple_tree_eval_and() {
+        let test_tree = ExprAst {
+            root: Some(Box::new(Node::bin_op_node(Operator::AND,
+                Some(Box::new(Node::var_node(0))),
+               Some(Box::new(Node::var_node(1))))))
+        };
+        assert!(test_tree.evaluate(&vec![true, true]))
+    }
+    
+    #[test]
+    fn simple_tree_eval_or() {
+        let test_tree = ExprAst {
+            root: Some(Box::new(Node::bin_op_node(Operator::OR,
+                Some(Box::new(Node::var_node(0))),
+               Some(Box::new(Node::var_node(1))))))
+        };
+        assert!(test_tree.evaluate(&vec![false, true]))
+    }
+
+    #[test]
+    fn simple_tree_eval_xor() {
+        let test_tree = ExprAst {
+            root: Some(Box::new(Node::bin_op_node(Operator::XOR,
+                Some(Box::new(Node::var_node(0))),
+               Some(Box::new(Node::var_node(1))))))
+        };
+        assert!(!test_tree.evaluate(&vec![true, true]))
+    }
+
+    #[test]
+    fn complex_tree_eval() {
+        let expr = parser::Expr::build_expr(String::from("(a & (b ^ ~(a | c))) & b")).unwrap();
+        let test_tree = ExprAst::build(&expr);
+        assert!(test_tree.evaluate(&vec![true, true, false]))
+    }
 }
