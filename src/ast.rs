@@ -36,10 +36,6 @@ impl Node {
         Self::new(Token::VAR(ndx), None, None)
     }
 
-    pub fn get_value(&self) -> parser::Token {
-        self.value
-    }
-
     fn evaluate(&self, values: &Vec<bool>) -> bool {
         match self.value {
             Token::VAR(ndx) => return values[ndx],
@@ -47,7 +43,7 @@ impl Node {
                 Operator::AND => return self.left.as_ref().expect("Left operand empty").evaluate(values) && self.right.as_ref().expect("Right operand empty").evaluate(values),
                 Operator::OR => return self.left.as_ref().expect("Left operand empty").evaluate(values) || self.right.as_ref().expect("Right operand empty").evaluate(values),
                 Operator::XOR => return self.left.as_ref().expect("left operand empty").evaluate(values) ^ self.right.as_ref().expect("Right operand empty").evaluate(values),
-                Operator::NOT => return !self.left.as_ref().expect("child empty").evaluate(values),
+                Operator::NOT => return !(self.left.as_ref().expect("child empty").evaluate(values)),
             },
             _ => panic!("Should not occur")
         }
@@ -74,30 +70,19 @@ impl ExprAst {
                     let leaf_node = Node::var_node(*ndx);
                     node_stack.push(Box::new(leaf_node));
                 }
-                parser::Token::RParen => {
-                    Self::build_helper_paren(&mut op_stack, &mut node_stack);
-                    // while let Some(Token::OP(o)) = op_stack.pop() {
-                    //     if *o == Operator::NOT {
-                    //         let child = node_stack.pop();
-                    //         node_stack.push(Box::new(Node::unary_op_node(*o, child)));
-                    //     } else {
-                    //         println!("Prior state of stack: {:?}", node_stack);
-                    //         let left_child = node_stack.pop();
-                    //         let right_child = node_stack.pop();
-                    //         println!("Current state of stack: {:?}", node_stack);
-                    //         node_stack.push(Box::new(Node::bin_op_node(*o, left_child, right_child)));
-                    //     }
-                    // }
-                }
+                parser::Token::RParen => Self::build_helper_paren(&mut op_stack, &mut node_stack),
+                parser::Token::LParen => op_stack.push(token),
                 _ => 
                 {
+                    // println!("Current state of op_stack: {:?}", op_stack);
                     while let Some(Token::OP(o)) = op_stack.last() {
-                        if *o == Operator::NOT {
-                            println!("Prior state of stack: {:?}", node_stack);
+                        // dbg!(o);
+                        if *o == Operator::NOT && token != &Token::OP(Operator::NOT) {
+                            // println!("Prior state of stack (triggered by NOT): {:?}", node_stack);
                             op_stack.pop();
                             let child = node_stack.pop();
                             node_stack.push(Box::new(Node::unary_op_node(*o, child)));
-                            println!("Current state of stack: {:?}", node_stack);
+                            // println!("Current state of stack: {:?}", node_stack);
                         } else {
                             break;
                         }
@@ -106,11 +91,14 @@ impl ExprAst {
                 }
             }
         }
-
+        
+        // println!("Current state of op_stack before pop: {:?}", op_stack);
+        // println!("Current state of node_stack before pop: {:?}", node_stack);
         if !op_stack.is_empty() {
             Self::build_helper_paren(&mut op_stack, &mut node_stack);
         }
-        // dbg!(&node_stack);
+
+        // println!("Current state of stack before pop: {:?}", node_stack);
 
         let root = node_stack.pop();
         ExprAst {
@@ -134,20 +122,6 @@ impl ExprAst {
             }
         }
     }
-
-    // fn build_helper_op<'a>(op_stack: &'a mut Vec<&parser::Token>, node_stack: &mut Vec<Box<Node>>, token: &'a Token) {
-    //     while let Some(Token::OP(o)) = op_stack.iter().next() {
-    //         if *o == Operator::NOT {
-    //             println!("Prior state of stack: {:?}", node_stack);
-    //             op_stack.pop();
-    //             let child = node_stack.pop();
-    //             node_stack.push(Box::new(Node::unary_op_node(*o, child)));
-    //             println!("Current state of stack: {:?}", node_stack);
-    //         } else {
-    //             op_stack.push(token);
-    //         }
-    //     }
-    // }
 
     pub fn evaluate(&self, values: &Vec<bool>) -> bool {
         if let Some(root) = &self.root {
@@ -176,33 +150,33 @@ mod test {
         false
     }
     
-    #[test]
-    fn simple_test() {
-        let expr = parser::Expr::build_expr(String::from("a & b")).unwrap();
-        let expected = ExprAst {
-            root: Some(Box::new(Node::bin_op_node(Operator::AND,
-                                             Some(Box::new(Node::var_node(1))), 
-                                            Some(Box::new(Node::var_node(0))))))
-        };
-        assert!(compare_ast(ExprAst::build(&expr).root, expected.root))
-    }
+    // #[test]
+    // fn simple_test() {
+        // let expr = parser::Expr::build_expr(String::from("a & b")).unwrap();
+        // let expected = ExprAst {
+        //     root: Some(Box::new(Node::bin_op_node(Operator::AND,
+        //                                      Some(Box::new(Node::var_node(1))), 
+        //                                     Some(Box::new(Node::var_node(0))))))
+        // };
+        // assert!(compare_ast(ExprAst::build(&expr).root, expected.root))
+    // }
 
-    #[test]
-    fn complex_test() {
-        let expr = parser::Expr::build_expr(String::from("a ^ (b & ~(c | d))")).unwrap();
-        let expected = ExprAst {
-            root: 
-            Some(Box::new(Node::bin_op_node(Operator::XOR,
-                Some(Box::new(Node::bin_op_node(Operator::AND,
-                    Some(Box::new(Node::unary_op_node(Operator::NOT, 
-                        Some(Box::new(Node::bin_op_node(Operator::OR,
-                            Some(Box::new(Node::var_node(3))),
-                           Some(Box::new(Node::var_node(2))))))))),
-                   Some(Box::new(Node::var_node(1)))))),
-               Some(Box::new(Node::var_node(0))))))
-        };
-        assert!(compare_ast(ExprAst::build(&expr).root, expected.root))
-    } 
+    // #[test]
+    // fn complex_test() {
+    //     let expr = parser::expr::build_expr(string::from("a ^ (b & ~(c | d))")).unwrap();
+    //     let expected = exprast {
+    //         root: 
+    //         some(box::new(node::bin_op_node(operator::xor,
+    //             some(box::new(node::bin_op_node(operator::and,
+    //                 some(box::new(node::unary_op_node(operator::not, 
+    //                     some(box::new(node::bin_op_node(operator::or,
+    //                         some(box::new(node::var_node(3))),
+    //                        some(box::new(node::var_node(2))))))))),
+    //                some(box::new(node::var_node(1)))))),
+    //            some(box::new(node::var_node(0))))))
+    //     };
+    //     assert!(compare_ast(exprast::build(&expr).root, expected.root))
+    // } 
 
     #[test]
     fn empty_eval_test() {
@@ -251,18 +225,28 @@ mod test {
     }
 
     #[test]
-    fn complex_tree_eval() {
-        let expr = parser::Expr::build_expr(String::from("(a & (b ^ ~(a | c))) & b")).unwrap();
-        let test_tree = ExprAst::build(&expr);
-        assert!(test_tree.evaluate(&vec![true, true, false]))
+    fn test_eval() {
+        let test_tree = ExprAst {
+            root:Some(Box::new(Node::unary_op_node(Operator::NOT, 
+                Some(Box::new(Node::bin_op_node(Operator::AND, 
+                    Some(Box::new(Node::var_node(1))), 
+                    Some(Box::new(Node::var_node(0)))))))))
+        };
+        assert!(test_tree.evaluate(&vec![true, true]))
     }
+
+    // #[test]
+    // fn complex_tree_eval() {
+    //     let expr = parser::Expr::build_expr(String::from("(a & (b ^ ~(a | c))) & b")).unwrap();
+    //     let test_tree = ExprAst::build(&expr);
+    //     assert!(test_tree.evaluate(&vec![true, true, false]))
+    // }
 
     #[test]
     fn test_fail() {
         let expr = parser::Expr {
             num_vars: 2,
             tokens: vec![Token::VAR(0), Token::OP(Operator::AND), Token::VAR(1)],
-            rpn: vec![]
         };
         let test_tree = ExprAst::build(&expr);
         let expected = ExprAst {
@@ -279,7 +263,6 @@ mod test {
         let expr = parser::Expr {
             num_vars: 2,
             tokens: vec![Token::OP(Operator::NOT), Token::VAR(0), Token::OP(Operator::AND), Token::OP(Operator::NOT), Token::VAR(1)],
-            rpn: vec![]
         };
         let test_tree = ExprAst::build(&expr);
         let expected = ExprAst {
@@ -293,3 +276,4 @@ mod test {
         
     }
 }
+

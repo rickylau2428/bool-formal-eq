@@ -1,5 +1,6 @@
 use std::io;
 use std::io::*;
+use std::collections::*;
 
 use ast::ExprAst;
 
@@ -7,26 +8,34 @@ mod parser;
 mod ast;
 
 fn main() {
-    print!("Please enter the first expression: ");
-    let input1 = get_user_input();
-    print!("Please enter the second expression: ");
-    let input2 = get_user_input();
-    let expr1 = parser::Expr::build_expr(input1).expect("Invalid string");
-    dbg!(&expr1.rpn);
-    let expr2 = parser::Expr::build_expr(input2).expect("Invalid string");
+    let (input1, input2, num_vars) = get_user_input();
+    let mut bool_vars: HashMap<char, usize> = HashMap::new();
 
-    if expr1.get_num_vars() != expr2.get_num_vars() {
-        println!("The two expressions are not logically equivalent (Different # of variables)");
-        std::process::exit(1)
-    }
+    let mut expr1 = parser::Expr::new();
+    expr1.build_expr(input1, &mut bool_vars, |c, map| {
+        if !c.is_ascii_alphabetic() {
+            return Err("Invalid symbol in expression.");
+        } else if !map.contains_key(&c) {
+            map.insert(c.to_ascii_lowercase(), map.len());
+        }
+        Ok(())
+    }).unwrap();
 
+    let mut expr2 = parser::Expr::new();
+    expr2.build_expr(input2, &mut bool_vars, |c, map| {
+        if !map.contains_key(&c) {
+            return Err("Expression 2 contains variables not in expression 1");
+        }
+        Ok(())
+    }).unwrap();
+    
     let ast1 = ExprAst::build(&expr1);
     // dbg!(&ast1);
     let ast2 = ExprAst::build(&expr2);
     // dbg!(&ast2);
 
-    let bool_permutations = get_permutations(expr1.get_num_vars());
-    println!("{}", expr1.get_num_vars());
+    let bool_permutations = get_permutations(num_vars);
+    // println!("{}", expr1.get_num_vars());
     for bool_perm in bool_permutations {
         let first = ast1.evaluate(&bool_perm);
         let second = ast2.evaluate(&bool_perm);
@@ -40,22 +49,45 @@ fn main() {
 
     println!("Congrats! The two are logically equivalent");
 
-//    let expr = build(&args[1]).unwrap_or_else(|err| {
-//        eprintln!("Problem parsing arguments: {err}");
-//        process::exit(1);
-//    });
-//    dbg!(expr);
-
 }
 
-fn get_user_input() -> String {
-    let mut input = String::new();
+fn get_user_input() -> (String, String, usize) {
+    let mut input1= String::new();
+    let mut input2= String::new();
 
+    print!("Please enter the first expression: ");
     io::stdout().flush().unwrap();
-    io::stdin().read_line(&mut input).unwrap();
-    input.pop();
+    io::stdin().read_line(&mut input1).unwrap();
+    input1.pop();
 
-    input
+    print!("Please enter the second expression: ");
+    io::stdout().flush().unwrap();
+    io::stdin().read_line(&mut input2).unwrap();
+    input2.pop();
+
+    let mut set1: HashSet<char> = HashSet::new();
+    let mut set2: HashSet<char> = HashSet::new();
+
+    input1.chars().for_each(|c| {
+        if c.is_ascii_alphabetic() {
+            set1.insert(c);
+        } 
+    });
+
+    input2.chars().for_each(|c| {
+        if c.is_ascii_alphabetic() {
+            set2.insert(c);
+        } 
+    });
+
+    // dbg!(&set1.len());
+    // dbg!(&set2.len());
+
+    if set1.len() > set2.len() {
+        (input1, input2, set1.len())
+    } else {
+        (input2, input1, set2.len())
+    }
 }
 
 fn get_permutations(n: usize) -> Vec<Vec<bool>> {
