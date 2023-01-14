@@ -1,6 +1,7 @@
 use std::io;
 use std::io::*;
 use std::collections::*;
+use tabled::{builder::Builder};
 
 use ast::ExprAst;
 
@@ -8,8 +9,9 @@ mod parser;
 mod ast;
 
 fn main() {
-    let (input1, input2, num_vars) = get_user_input();
+    let (input1, input2, bool_chars) = get_user_input();
     let mut bool_vars: HashMap<char, usize> = HashMap::new();
+    let mut builder = Builder::default();
 
     let mut expr1 = parser::Expr::new();
     expr1.build_expr(input1, &mut bool_vars, |c, map| {
@@ -34,7 +36,7 @@ fn main() {
     let ast2 = ExprAst::build(&expr2);
     // dbg!(&ast2);
 
-    let bool_permutations = get_permutations(num_vars);
+    let bool_permutations = get_permutations(bool_chars.len());
     // println!("{}", expr1.get_num_vars());
     for bool_perm in bool_permutations {
         let first = ast1.evaluate(&bool_perm);
@@ -51,7 +53,7 @@ fn main() {
 
 }
 
-fn get_user_input() -> (String, String, usize) {
+fn get_user_input() -> (String, String, HashSet<char>) {
     let mut input1= String::new();
     let mut input2= String::new();
 
@@ -84,9 +86,9 @@ fn get_user_input() -> (String, String, usize) {
     // dbg!(&set2.len());
 
     if set1.len() > set2.len() {
-        (input1, input2, set1.len())
+        (input1, input2, set1)
     } else {
-        (input2, input1, set2.len())
+        (input2, input1, set2)
     }
 }
 
