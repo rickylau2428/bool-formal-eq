@@ -2,7 +2,7 @@ use std::io;
 use std::io::*;
 use std::collections::*;
 use expr_builder::evaluate_expr;
-// use tabled::{builder::Builder};
+use tabled::{builder::Builder, ModifyObject, object::Rows, Alignment, Style};
 use linked_hash_map::LinkedHashMap;
 use expr_builder::Expr;
 
@@ -14,18 +14,26 @@ fn main() {
     let (inputs, bool_vars) = get_user_input();
     let mut expressions: Vec<Expr> = Vec::new();
     let permutations: Vec<Vec<bool>> = get_permutations(bool_vars.len());
-    // let mut builder = Builder::default();
+    let mut builder = Builder::default();
 
     for entry in inputs.iter() {
         expressions.push(expr_builder::build(entry, &bool_vars).expect("Build failed")); 
     }
 
+    builder.set_columns(bool_vars.keys().map(|c| c.to_string()).chain(inputs.into_iter()));
+
     // let mut status = true;
     for perm in permutations.iter() {
+        let mut record = perm.clone();
         let mut runs: Vec<bool> = Vec::new(); 
         for entry in expressions.iter() {
             runs.push(evaluate_expr(entry, perm));
         }
+
+        record.append(&mut runs.clone());
+        let table_row = record.iter().map(|e| e.to_string());
+        builder.add_record(table_row);
+
         let res: bool = runs.into_iter().reduce(|acc, e| acc == e).unwrap();
         if !res {
             println!("Not all expressions are logically equivalent");
@@ -33,6 +41,12 @@ fn main() {
         }
     }
 
+    let table = builder.build()
+        .with(Style::rounded())
+        .with(Rows::new(1..).modify().with(Alignment::left()))
+        .to_string();
+
+    println!("{}", table);
     println!("Congrats! All expressions are logically equivalent");
 }
 
