@@ -21,6 +21,7 @@ fn main() {
     }
 
     builder.set_columns(bool_vars.keys().map(|c| c.to_string()).chain(inputs.into_iter()));
+    let mut flag = true;
 
     // let mut status = true;
     for perm in permutations.iter() {
@@ -36,24 +37,28 @@ fn main() {
 
         let res: bool = runs.into_iter().reduce(|acc, e| acc == e).unwrap();
         if !res {
-            println!("Not all expressions are logically equivalent");
-            std::process::exit(1);
+            flag = false;
         }
     }
 
     let table = builder.build()
         .with(Style::rounded())
-        .with(Rows::new(1..).modify().with(Alignment::left()))
+        .with(Rows::new(1..).modify().with(Alignment::center()))
         .to_string();
 
     println!("{}", table);
-    println!("Congrats! All expressions are logically equivalent");
+
+    if flag {
+        println!("Congrats! All expressions are logically equivalent");
+    } else {
+        println!("Not all expressions are logically equivalent");
+    }
 }
 
 // fn get_user_input() -> (String, String, HashSet<char>) {
 fn get_user_input() -> (Vec<String>, LinkedHashMap<char, usize>) {
     let mut inputs: Vec<String> = Vec::new();
-    println!("Boolean Formula Equivalence Checker; enter an empty string to evaluate");
+    println!("Boolean Formula Equivalence Checker; enter an empty string to begin evaluation");
     loop {
         print!("Please enter an expression: ");
         let input = read_input();
