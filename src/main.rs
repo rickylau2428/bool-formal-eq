@@ -1,6 +1,5 @@
 use std::io;
 use std::io::*;
-use std::collections::*;
 use expr_builder::evaluate_expr;
 use tabled::{builder::Builder, ModifyObject, object::Rows, Alignment, Style};
 use linked_hash_map::LinkedHashMap;
@@ -25,13 +24,13 @@ fn main() {
 
     // let mut status = true;
     for perm in permutations.iter() {
-        let mut record = perm.clone();
+        let mut record: Vec<usize> = perm.clone().iter().map(|b| b.clone().into()).collect();
         let mut runs: Vec<bool> = Vec::new(); 
         for entry in expressions.iter() {
             runs.push(evaluate_expr(entry, perm));
         }
 
-        record.append(&mut runs.clone());
+        record.append(&mut runs.clone().iter().map(|b| b.clone().into()).collect());
         let table_row = record.iter().map(|e| e.to_string());
         builder.add_record(table_row);
 
@@ -69,34 +68,30 @@ fn get_user_input() -> (Vec<String>, LinkedHashMap<char, usize>) {
         }
     }
 
-    let mut seen_chars: HashSet<char> = HashSet::new();
+    // let mut seen_chars: HashSet<char> = HashSet::new();
+    let mut seen_chars: LinkedHashMap<char, usize> = LinkedHashMap::new();
     // dbg!(&inputs);
 
     for entry in inputs.iter() {
-        let mut temp_set: HashSet<char> = HashSet::new();
+        // let mut temp_set: HashSet<char> = HashSet::new();
+        let mut temp_map: LinkedHashMap<char, usize> = LinkedHashMap::new();
 
         for c in entry.chars() {
-            if c == ' ' || OPERATORS.contains(&c) {
+            if c == ' ' || OPERATORS.contains(&c) || temp_map.contains_key(&c) {
                 continue;
             } else if c.is_ascii_alphabetic() {
-                temp_set.insert(c);
+                temp_map.insert(c, temp_map.len());
             } else {
                 panic!("Non-alphabetic variable found");
             }
         }
 
-        if temp_set.len() > seen_chars.len() {
-            seen_chars = temp_set;
+        if temp_map.len() > seen_chars.len() {
+            seen_chars = temp_map;
         }
     }
 
-    let bool_vars:LinkedHashMap<char, usize> = 
-        seen_chars.iter()
-                  .enumerate()
-                  .map(|(i, c)| (*c, i))
-                  .collect::<LinkedHashMap<char, usize>>();
-
-    return (inputs, bool_vars)
+    return (inputs, seen_chars)
 
 }
 
@@ -121,8 +116,8 @@ fn get_permutations(n: usize) -> Vec<Vec<bool>> {
         let mut false_append = perm;
         true_append.push(true);
         false_append.push(false);
-        perms.push(true_append);
         perms.push(false_append); 
+        perms.push(true_append);
     }
 
     perms
