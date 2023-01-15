@@ -6,6 +6,7 @@ version = 3
 name = "bool-eq"
 version = "0.1.0"
 dependencies = [
+ "linked-hash-map",
  "tabled",
 ]
 
@@ -26,6 +27,12 @@ name = "heck"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2540771e65fc8cb83cd6e8a237f70c319bd5c29f78ed1084ba5d50eeac86f7f9"
+
+[[package]]
+name = "linked-hash-map"
+version = "0.5.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0717cef1bc8b636c6e1c1bbdefc09e6322da8a9321966e8928ef80d20f7f770f"
 
 [[package]]
 name = "papergrid"

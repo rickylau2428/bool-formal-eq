@@ -1,95 +1,94 @@
 use std::io;
 use std::io::*;
 use std::collections::*;
-use tabled::{builder::Builder};
+use expr_builder::evaluate_expr;
+// use tabled::{builder::Builder};
+use linked_hash_map::LinkedHashMap;
+use expr_builder::Expr;
 
-use ast::ExprAst;
+mod expr_builder;
 
-mod parser;
-mod ast;
+static OPERATORS: [char; 7] = ['&', '|', '^', '!', '~', '(', ')'];
 
 fn main() {
-    let (input1, input2, bool_chars) = get_user_input();
-    let mut bool_vars: HashMap<char, usize> = HashMap::new();
-    let mut builder = Builder::default();
+    let (inputs, bool_vars) = get_user_input();
+    let mut expressions: Vec<Expr> = Vec::new();
+    let permutations: Vec<Vec<bool>> = get_permutations(bool_vars.len());
+    // let mut builder = Builder::default();
 
-    let mut expr1 = parser::Expr::new();
-    expr1.build_expr(input1, &mut bool_vars, |c, map| {
-        if !c.is_ascii_alphabetic() {
-            return Err("Invalid symbol in expression.");
-        } else if !map.contains_key(&c) {
-            map.insert(c.to_ascii_lowercase(), map.len());
-        }
-        Ok(())
-    }).unwrap();
-
-    let mut expr2 = parser::Expr::new();
-    expr2.build_expr(input2, &mut bool_vars, |c, map| {
-        if !map.contains_key(&c) {
-            return Err("Expression 2 contains variables not in expression 1");
-        }
-        Ok(())
-    }).unwrap();
-    
-    let ast1 = ExprAst::build(&expr1);
-    // dbg!(&ast1);
-    let ast2 = ExprAst::build(&expr2);
-    // dbg!(&ast2);
-
-    let bool_permutations = get_permutations(bool_chars.len());
-    // println!("{}", expr1.get_num_vars());
-    for bool_perm in bool_permutations {
-        let first = ast1.evaluate(&bool_perm);
-        let second = ast2.evaluate(&bool_perm);
-        println!("For perm {:?}, ast1 is {}, ast2 is {}", bool_perm, first, second);
-
-        if first != second {
-            println!("The two expressions are not logically equivalent");
-            std::process::exit(1);
-        }    
+    for entry in inputs.iter() {
+        expressions.push(expr_builder::build(entry, &bool_vars).expect("Build failed")); 
     }
 
-    println!("Congrats! The two are logically equivalent");
+    // let mut status = true;
+    for perm in permutations.iter() {
+        let mut runs: Vec<bool> = Vec::new(); 
+        for entry in expressions.iter() {
+            runs.push(evaluate_expr(entry, perm));
+        }
+        let res: bool = runs.into_iter().reduce(|acc, e| acc == e).unwrap();
+        if !res {
+            println!("Not all expressions are logically equivalent");
+            std::process::exit(1);
+        }
+    }
+
+    println!("Congrats! All expressions are logically equivalent");
+}
+
+// fn get_user_input() -> (String, String, HashSet<char>) {
+fn get_user_input() -> (Vec<String>, LinkedHashMap<char, usize>) {
+    let mut inputs: Vec<String> = Vec::new();
+    println!("Boolean Formula Equivalence Checker; enter an empty string to evaluate");
+    loop {
+        print!("Please enter an expression: ");
+        let input = read_input();
+        if input.is_empty() {
+            break;
+        } else {
+            inputs.push(input);
+        }
+    }
+
+    let mut seen_chars: HashSet<char> = HashSet::new();
+    // dbg!(&inputs);
+
+    for entry in inputs.iter() {
+        let mut temp_set: HashSet<char> = HashSet::new();
+
+        for c in entry.chars() {
+            if c == ' ' || OPERATORS.contains(&c) {
+                continue;
+            } else if c.is_ascii_alphabetic() {
+                temp_set.insert(c);
+            } else {
+                panic!("Non-alphabetic variable found");
+            }
+        }
+
+        if temp_set.len() > seen_chars.len() {
+            seen_chars = temp_set;
+        }
+    }
+
+    let bool_vars:LinkedHashMap<char, usize> = 
+        seen_chars.iter()
+                  .enumerate()
+                  .map(|(i, c)| (*c, i))
+                  .collect::<LinkedHashMap<char, usize>>();
+
+    return (inputs, bool_vars)
 
 }
 
-fn get_user_input() -> (String, String, HashSet<char>) {
-    let mut input1= String::new();
-    let mut input2= String::new();
+fn read_input() -> String {
+    let mut input = String::new();
 
-    print!("Please enter the first expression: ");
     io::stdout().flush().unwrap();
-    io::stdin().read_line(&mut input1).unwrap();
-    input1.pop();
+    io::stdin().read_line(&mut input).unwrap();
+    input.pop();
 
-    print!("Please enter the second expression: ");
-    io::stdout().flush().unwrap();
-    io::stdin().read_line(&mut input2).unwrap();
-    input2.pop();
-
-    let mut set1: HashSet<char> = HashSet::new();
-    let mut set2: HashSet<char> = HashSet::new();
-
-    input1.chars().for_each(|c| {
-        if c.is_ascii_alphabetic() {
-            set1.insert(c);
-        } 
-    });
-
-    input2.chars().for_each(|c| {
-        if c.is_ascii_alphabetic() {
-            set2.insert(c);
-        } 
-    });
-
-    // dbg!(&set1.len());
-    // dbg!(&set2.len());
-
-    if set1.len() > set2.len() {
-        (input1, input2, set1)
-    } else {
-        (input2, input1, set2)
-    }
+    input
 }
 
 fn get_permutations(n: usize) -> Vec<Vec<bool>> {
@@ -109,10 +108,3 @@ fn get_permutations(n: usize) -> Vec<Vec<bool>> {
 
     perms
 }
-
-//fn build(path: &String) -> Result<String, Box<dyn Error>> {
-//    let contents = fs::read_to_string(path)?;
-//
-//    Ok(contents)
-//
-//}
