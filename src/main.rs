@@ -13,13 +13,15 @@ fn main() {
     let (inputs, bool_vars) = get_user_input();
     let mut expressions: Vec<Expr> = Vec::new();
     let permutations: Vec<Vec<bool>> = get_permutations(bool_vars.len());
-    let mut builder = Builder::default();
+    let mut full_builder = Builder::default();
+    let mut failure_builder = Builder::default();
 
     for entry in inputs.iter() {
         expressions.push(expr_builder::build(entry, &bool_vars).expect("Build failed")); 
     }
 
-    builder.set_columns(bool_vars.keys().map(|c| c.to_string()).chain(inputs.into_iter()));
+    full_builder.set_columns(bool_vars.keys().map(|c| c.to_string()).chain(inputs.clone().into_iter()));
+    failure_builder.set_columns(bool_vars.keys().map(|c| c.to_string()).chain(inputs.into_iter()));
     let mut flag = true;
 
     // let mut status = true;
@@ -32,15 +34,16 @@ fn main() {
 
         record.append(&mut runs.clone().iter().map(|b| b.clone().into()).collect());
         let table_row = record.iter().map(|e| e.to_string());
-        builder.add_record(table_row);
+        full_builder.add_record(table_row.clone());
 
         let res: bool = runs.into_iter().reduce(|acc, e| acc == e).unwrap();
         if !res {
             flag = false;
+            failure_builder.add_record(table_row);
         }
     }
 
-    let table = builder.build()
+    let table = full_builder.build()
         .with(Style::rounded())
         .with(Rows::new(1..).modify().with(Alignment::center()))
         .to_string();
@@ -51,6 +54,13 @@ fn main() {
         println!("Congrats! All expressions are logically equivalent");
     } else {
         println!("Not all expressions are logically equivalent");
+        println!("Failure cases are as follows: ");
+        let failure_table = failure_builder.build()
+            .with(Style::rounded())
+            .with(Rows::new(1..).modify().with(Alignment::center()))
+            .to_string();
+        
+        println!("{}", failure_table);
     }
 }
 
