@@ -3,6 +3,8 @@ use std::io::*;
 use expr_builder::evaluate_expr;
 use tabled::{builder::Builder, ModifyObject, object::Rows, Alignment, Style};
 use linked_hash_map::LinkedHashMap;
+use std::thread;
+use std::sync::{Arc, RwLock};
 use expr_builder::Expr;
 
 mod expr_builder;
@@ -11,27 +13,31 @@ static OPERATORS: [char; 7] = ['&', '|', '^', '!', '~', '(', ')'];
 
 fn main() {
     let (inputs, bool_vars) = get_user_input();
-    let mut expressions: Vec<Expr> = Vec::new();
+    let mut expressions: Arc<RwLock<Vec<Expr>>> = Arc::new(RwLock::new(Vec::new()));
     let permutations: Vec<Vec<bool>> = get_permutations(bool_vars.len());
     let mut full_builder = Builder::default();
     let mut failure_builder = Builder::default();
 
     for entry in inputs.iter() {
-        expressions.push(expr_builder::build(entry, &bool_vars).expect("Build failed")); 
+        expressions.write().unwrap().push(expr_builder::build(entry, &bool_vars).expect("Build failed")); 
     }
 
     full_builder.set_columns(bool_vars.keys().map(|c| c.to_string()).chain(inputs.clone().into_iter()));
     failure_builder.set_columns(bool_vars.keys().map(|c| c.to_string()).chain(inputs.into_iter()));
     let mut flag = true;
 
-    // let mut status = true;
+    let mut handles = vec![];
     for perm in permutations.iter() {
         let mut record: Vec<usize> = perm.clone().iter().map(|b| b.clone().into()).collect();
         let mut runs: Vec<bool> = Vec::new(); 
+        let handle = thread::spawn(|| {
+
+        });
         for entry in expressions.iter() {
-            runs.push(evaluate_expr(entry, perm));
+            // runs.push(evaluate_expr(entry.root, perm));
         }
 
+        handles.push(handle);
         record.append(&mut runs.clone().iter().map(|b| b.clone().into()).collect());
         let table_row = record.iter().map(|e| e.to_string());
         full_builder.add_record(table_row.clone());
@@ -41,6 +47,23 @@ fn main() {
             flag = false;
             failure_builder.add_record(table_row);
         }
+    }
+
+    let mut results: Vec<Vec<bool>> = Vec::with_capacity(permutations.len());
+    for perm in permutations.iter().enumerate() {
+        let exprs = expressions.clone();
+        let out_vec = results[perm.0].clone();
+        let handle = thread::spawn(move || {
+            let expr_vec = exprs.read().unwrap();
+            for entry in expr_vec.iter() {
+                out_vec.push(evaluate_expr(entry, &perm.1));
+            }
+        });
+        handles.push(handle);
+    }
+
+    for handle in handles {
+        handle.join().unwrap();
     }
 
     let table = full_builder.build()

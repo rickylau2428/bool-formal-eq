@@ -21,14 +21,14 @@ pub enum Operator {
 #[derive(Debug)]
 pub struct Node {
     val: Token,
-    children: Vec<ASTNode>
+    children: Vec<Option<ASTNode>>
 }
 
-type ASTNode = Option<Arc<RwLock<Node>>>;
+type ASTNode = Arc<RwLock<Node>>;
 
 pub struct Expr {
     tokens: Vec<Token>,
-    root: ASTNode
+    root: Option<ASTNode>
 }
 
 pub fn build(input: &String, bool_vars: &LinkedHashMap<char, usize>) -> Result<Expr, String> {
@@ -104,7 +104,7 @@ pub fn build_ast(expr: Expr) -> Expr {
    
     return Expr {
         tokens: expr.tokens,
-        root: node_stack.pop().expect("Nothing left on node stack to set as root")
+        root: Some(node_stack.pop().expect("Nothing left on node stack to set as root"))
     }
 }
 
@@ -112,37 +112,37 @@ fn handle_op(op_stack: &mut Vec<&Token>, node_stack: &mut Vec<ASTNode>) {
     while let Some(Token::OP(o)) = op_stack.last() {
         if *o == Operator::NOT {
             let child = node_stack.pop().expect("No nodes left on stack: triggered by NOT");
-            node_stack.push(create_op_node(*o, vec![child]))
+            node_stack.push(create_op_node(*o, vec![Some(child)]))
         } else {
             let right_child = node_stack.pop().expect("No nodes left on stack: trig by bin_op");
             let left_child = node_stack.pop().expect("No nodes left on stack: trig by bin_op");
-            node_stack.push(create_op_node(*o, vec![left_child, right_child]));
+            node_stack.push(create_op_node(*o, vec![Some(left_child), Some(right_child)]));
         }
         op_stack.pop();
     }
 }
 
 fn create_var_node(val: usize) -> ASTNode {
-    Some(Arc::new(RwLock::new(
+    Arc::new(RwLock::new(
         Node {
             val: Token::VAR(val),
             children: vec![]
         }
-    )))
+    ))
 }
 
-fn create_op_node(val: Operator, children: Vec<ASTNode>) -> ASTNode {
-    Some(Arc::new(RwLock::new(
+fn create_op_node(val: Operator, children: Vec<Option<ASTNode>>) -> ASTNode {
+    Arc::new(RwLock::new(
         Node {
             val: Token::OP(val),
             children
         }
-    )))
+    ))
 }
 
 pub fn evaluate_expr(expr: &Expr, values: &Vec<bool>) -> bool {
-    if let Some(root) = &expr.root {
-        root.clone().read().unwrap().evaluate(values)
+    if let Some(node) = &expr.root {
+        node.clone().read().unwrap().evaluate(values)
     } else {
         return false;
     }
