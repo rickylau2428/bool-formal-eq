@@ -152,7 +152,7 @@ pub fn evaluate_expr(expr: &Expr, values: &Vec<bool>) -> bool {
 
 impl Node {
     pub fn evaluate(&self, values: &Vec<bool>) -> bool {
-        // thread::sleep(time::Duration::from_millis(10));
+        // thread::sleep(time::Duration::from_millis(5));
         match &self.val {
             Token::VAR(ndx) => return values[*ndx],
             Token::OP(o) => match o {

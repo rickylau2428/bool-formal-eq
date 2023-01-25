@@ -111,7 +111,6 @@ fn main() {
 
 fn get_user_input() -> (Vec<String>, LinkedHashMap<char, usize>) {
     let mut inputs: Vec<String> = Vec::new();
-    println!("Boolean Formula Equivalence Checker; enter an empty string to begin evaluation");
 
     // println!("Boolean Formula Equivalence Checker; testing thread speedup");
     // let expr1 = String::from("(a & (b | ~c)) ^ ~(~(e & f) | (g & h)) ^ d");
@@ -119,6 +118,7 @@ fn get_user_input() -> (Vec<String>, LinkedHashMap<char, usize>) {
     // inputs.push(expr1);
     // inputs.push(expr2);
 
+    println!("Boolean Formula Equivalence Checker; enter an empty string to begin evaluation");
     loop {
         print!("Please enter an expression: ");
         let input = read_input();
