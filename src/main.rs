@@ -113,21 +113,21 @@ fn get_user_input() -> (Vec<String>, LinkedHashMap<char, usize>) {
     let mut inputs: Vec<String> = Vec::new();
     println!("Boolean Formula Equivalence Checker; enter an empty string to begin evaluation");
 
-    println!("Boolean Formula Equivalence Checker; testing thread speedup");
-    let expr1 = String::from("(a & (b | ~c)) ^ ~(~(e & f) | (g & h)) ^ d");
-    let expr2 = String::from("~a | (b ^ c) & (~(e & (g | h)) | (a & c)) ^ d");
-    inputs.push(expr1);
-    inputs.push(expr2);
+    // println!("Boolean Formula Equivalence Checker; testing thread speedup");
+    // let expr1 = String::from("(a & (b | ~c)) ^ ~(~(e & f) | (g & h)) ^ d");
+    // let expr2 = String::from("~a | (b ^ c) & (~(e & (g | h)) | (a & c)) ^ d");
+    // inputs.push(expr1);
+    // inputs.push(expr2);
 
-    // loop {
-    //     print!("Please enter an expression: ");
-    //     let input = read_input();
-    //     if input.is_empty() {
-    //         break;
-    //     } else {
-    //         inputs.push(input);
-    //     }
-    // }
+    loop {
+        print!("Please enter an expression: ");
+        let input = read_input();
+        if input.is_empty() {
+            break;
+        } else {
+            inputs.push(input);
+        }
+    }
 
     let mut seen_chars: LinkedHashMap<char, usize> = LinkedHashMap::new();
     for entry in inputs.iter() {
