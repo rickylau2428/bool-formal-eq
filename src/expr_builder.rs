@@ -1,6 +1,7 @@
 use std::sync::{Arc, RwLock};
 
 use linked_hash_map::LinkedHashMap;
+// use std::{thread, time};
 
 #[derive(Debug)]
 pub enum Token {
@@ -26,9 +27,10 @@ pub struct Node {
 
 type ASTNode = Arc<RwLock<Node>>;
 
+#[derive(Debug)]
 pub struct Expr {
     tokens: Vec<Token>,
-    root: Option<ASTNode>
+    pub root: Option<ASTNode>
 }
 
 pub fn build(input: &String, bool_vars: &LinkedHashMap<char, usize>) -> Result<Expr, String> {
@@ -150,6 +152,7 @@ pub fn evaluate_expr(expr: &Expr, values: &Vec<bool>) -> bool {
 
 impl Node {
     pub fn evaluate(&self, values: &Vec<bool>) -> bool {
+        // thread::sleep(time::Duration::from_millis(10));
         match &self.val {
             Token::VAR(ndx) => return values[*ndx],
             Token::OP(o) => match o {
