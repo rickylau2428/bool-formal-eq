@@ -8,6 +8,7 @@ use std::sync::{Arc, RwLock, Mutex};
 use expr_builder::Expr;
 
 mod expr_builder;
+mod bdd;
 
 static OPERATORS: [char; 7] = ['&', '|', '^', '!', '~', '(', ')'];
 
