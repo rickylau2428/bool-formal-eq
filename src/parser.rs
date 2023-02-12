@@ -1,6 +1,4 @@
-use crate::LinkedHashMap;
-
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Copy, Clone)]
 pub enum Token {
     VAR(char),
     LParen,
@@ -8,7 +6,7 @@ pub enum Token {
     OP(Operator)
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Copy, Clone)]
 pub enum Operator {
     AND,
     OR,
@@ -16,10 +14,19 @@ pub enum Operator {
     NOT
 }
 
-pub struct Expr {
+pub struct Tokenized {
     pub rpn: Vec<Token>,
-    pub ast_order: LinkedHashMap<char, usize>,
-    pub bdd_order: LinkedHashMap<char, usize>
+    pub tokens: Vec<Token>
+}
+
+pub fn parse_expr(input: String) -> Result<Tokenized, String> {
+    let tokens = tokenize(&input)?;
+    let rpn = convert_rpn(&tokens)?;
+
+    Ok(Tokenized {
+        rpn,
+        tokens
+    })
 }
 
 
@@ -47,23 +54,21 @@ fn tokenize(input: &String) -> Result<Vec<Token>, String> {
     Ok(tokens)
 }
 
-fn convert_rpn(tokens: Vec<Token>) -> Result<Vec<Token>, String> {
+fn convert_rpn(tokens: &Vec<Token>) -> Result<Vec<Token>, String> {
     let mut rpn: Vec<Token> = Vec::with_capacity(tokens.len());
-    let mut op_stack: Vec<Token> = Vec::with_capacity(tokens.len());
+    let mut op_stack: Vec<&Token> = Vec::with_capacity(tokens.len());
 
-    for token in tokens.into_iter() {
+    for token in tokens.iter() {
         match token {
             Token::LParen | Token::OP(Operator::NOT) => op_stack.push(token),
-            Token::VAR(_) => rpn.push(token),
+            Token::VAR(c) => rpn.push(Token::VAR(*c)),
             Token::RParen => {
                 loop {
-                    let top = op_stack.pop();
-                    let top_res = top.ok_or_else(|| return String::from("Unclosed right paren"));
-                    if let Ok(t) = top_res {
-                        if t == Token::LParen { break }
-                        else { rpn.push(t) }
+                    let top = op_stack.pop().ok_or(String::from("Unclosed right paren"))?;
+                    if let Token::OP(o) = top {
+                        rpn.push(Token::OP(*o));
                     } else {
-                        return Err(String::from("Unclosed right paren"));
+                        break;
                     }
                 }
             },
@@ -79,10 +84,10 @@ fn convert_rpn(tokens: Vec<Token>) -> Result<Vec<Token>, String> {
 
     if !op_stack.is_empty() {
         for op in op_stack.into_iter() {
-            if op == Token::LParen { 
+            if *op == Token::LParen { 
                 return Err(String::from("Unclosed left paren"))
             } else {
-                rpn.push(op);
+                rpn.push(*op);
             }
         }
     }
@@ -110,18 +115,18 @@ mod test {
     fn rpn_not() {
         let expected: Vec<Token> = vec![Token::VAR('a'), Token::OP(Operator::NOT), Token::VAR('b'), Token::OP(Operator::AND)];
         let input = tokenize(&String::from("~a & b")).expect("tokenize step failed");
-        assert_eq!(Ok(expected), convert_rpn(input))
+        assert_eq!(Ok(expected), convert_rpn(&input))
     }
 
     #[test]
     fn rpn_left_paren_unclosed() {
         let input = tokenize(&String::from("(a & b")).expect("tokenize step failed");
-        assert!(convert_rpn(input).is_err())
+        assert!(convert_rpn(&input).is_err())
     }
 
     #[test]
     fn rpn_right_paren_unclosed() {
         let input = tokenize(&String::from("a & b)")).expect("tokenize step failed");
-        assert!(convert_rpn(input).is_err())
+        assert!(convert_rpn(&input).is_err())
     }
 }
