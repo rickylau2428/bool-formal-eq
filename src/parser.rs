@@ -66,6 +66,7 @@ fn convert_rpn(tokens: &Vec<Token>) -> Result<Vec<Token>, String> {
                 loop {
                     let top = op_stack.pop().ok_or(String::from("Unclosed right paren"))?;
                     if let Token::OP(o) = top {
+                        // dbg!("Pushed {} to rpn", *o);
                         rpn.push(Token::OP(*o));
                     } else {
                         break;
@@ -83,7 +84,7 @@ fn convert_rpn(tokens: &Vec<Token>) -> Result<Vec<Token>, String> {
     }
 
     if !op_stack.is_empty() {
-        for op in op_stack.into_iter() {
+        for op in op_stack.into_iter().rev() {
             if *op == Token::LParen { 
                 return Err(String::from("Unclosed left paren"))
             } else {
@@ -115,6 +116,15 @@ mod test {
     fn rpn_not() {
         let expected: Vec<Token> = vec![Token::VAR('a'), Token::OP(Operator::NOT), Token::VAR('b'), Token::OP(Operator::AND)];
         let input = tokenize(&String::from("~a & b")).expect("tokenize step failed");
+        assert_eq!(Ok(expected), convert_rpn(&input))
+    }
+
+    #[test]
+    fn rpn_complex() {
+        let expected: Vec<Token> = vec![Token::VAR('a'), Token::VAR('b'), Token::OP(Operator::AND),
+        Token::VAR('c'), Token::VAR('d'), Token::VAR('e'), Token::OP(Operator::AND), Token::OP(Operator::XOR),
+        Token::OP(Operator::NOT), Token::OP(Operator::OR)];
+        let input = tokenize(&String::from("(a & b) | ~(c ^ (d & e))")).unwrap();
         assert_eq!(Ok(expected), convert_rpn(&input))
     }
 
