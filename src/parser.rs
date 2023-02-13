@@ -1,3 +1,7 @@
+use linked_hash_map::LinkedHashMap;
+
+static OPERATORS: [char; 7] = ['&', '|', '^', '!', '~', '(', ')'];
+
 #[derive(Debug, PartialEq, Copy, Clone)]
 pub enum Token {
     VAR(char),
@@ -14,13 +18,47 @@ pub enum Operator {
     NOT
 }
 
+pub struct SessionInput {
+    pub exprs: Vec<Tokenized>,
+    pub ast_order: LinkedHashMap<char, usize>,
+    pub bdd_order: LinkedHashMap<char, usize>
+}
+
 pub struct Tokenized {
     pub rpn: Vec<Token>,
     pub tokens: Vec<Token>
 }
 
-pub fn parse_expr(input: String) -> Result<Tokenized, String> {
-    let tokens = tokenize(&input)?;
+pub fn create_session(raw_inputs: &Vec<String>) -> Result<SessionInput, String> {
+    let mut ast_order = LinkedHashMap::new();
+    let mut bdd_order = LinkedHashMap::new();
+    let mut exprs = Vec::with_capacity(raw_inputs.len());
+
+    let mut update_ast_map = |raw: &String| {
+        for c in raw.chars() {
+            if c == ' ' || OPERATORS.contains(&c) || ast_order.contains_key(&c) {
+                continue;
+            } else if c.is_ascii_alphabetic() {
+                ast_order.insert(c, ast_order.len());
+            }
+        }
+    };
+
+    for input in raw_inputs.iter() {
+        let tokenized = parse_expr(input)?;
+        exprs.push(tokenized);
+        update_ast_map(input);
+    }
+
+    Ok(SessionInput {
+        exprs,
+        ast_order,
+        bdd_order
+    })
+}
+
+fn parse_expr(input: &String) -> Result<Tokenized, String> {
+    let tokens = tokenize(input)?;
     let rpn = convert_rpn(&tokens)?;
 
     Ok(Tokenized {

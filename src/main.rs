@@ -10,6 +10,7 @@ use expr_builder::Expr;
 mod expr_builder;
 mod bdd;
 mod parser;
+mod ast;
 
 static OPERATORS: [char; 7] = ['&', '|', '^', '!', '~', '(', ')'];
 
