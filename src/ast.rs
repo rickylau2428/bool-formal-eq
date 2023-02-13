@@ -75,6 +75,10 @@ pub fn build_ast_session(inputs: &SessionInput) -> ASTSession {
                     let ndx = inputs.ast_order.get(c).expect("Test").clone();
                     node_stack.push(create_var_node(ndx))
                 },
+                Token::OP(Operator::NOT) => {
+                    let child = node_stack.pop().expect("No nodes left on stack for NOT");
+                    node_stack.push(create_op_node(Operator::NOT, vec![Some(child)]));
+                },
                 Token::OP(o) => {
                     let right_child = node_stack.pop().expect("No nodes left on stack for binop");
                     let left_child = node_stack.pop().expect("No nodes left on stack for binop");
