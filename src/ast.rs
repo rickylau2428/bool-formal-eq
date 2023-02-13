@@ -121,6 +121,12 @@ fn evaluate_session_seq(session: ASTSession) -> ASTSession {
         results
     };
 }
+
+fn evaluate_session_sync(session: ASTSession) -> ASTSession {
+    session
+}
+
+
 fn create_var_node(val: usize) -> ASTNode {
     Arc::new(RwLock::new(
         Node::VAR(VarNode{
@@ -154,15 +160,7 @@ impl Node {
 
 #[cfg(test)]
 mod test {
-    use linked_hash_map::LinkedHashMap;
-
     use super::*;
-    fn setup() -> SessionInput {
-        let exprs = Vec::new();
-        let ast_order = LinkedHashMap::new();
-        let bdd_order = LinkedHashMap::new();
-        SessionInput { exprs, ast_order, bdd_order }
-    }
 
     #[test]
     fn simple_tree() {

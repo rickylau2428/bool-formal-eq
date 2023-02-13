@@ -31,7 +31,7 @@ pub struct Tokenized {
 
 pub fn create_session(raw_inputs: &Vec<String>) -> Result<SessionInput, String> {
     let mut ast_order = LinkedHashMap::new();
-    let mut bdd_order = LinkedHashMap::new();
+    let mut _bdd_order = LinkedHashMap::new();
     let mut exprs = Vec::with_capacity(raw_inputs.len());
 
     let mut update_ast_map = |raw: &String| {
@@ -53,7 +53,7 @@ pub fn create_session(raw_inputs: &Vec<String>) -> Result<SessionInput, String> 
     Ok(SessionInput {
         exprs,
         ast_order,
-        bdd_order
+        bdd_order: _bdd_order
     })
 }
 
