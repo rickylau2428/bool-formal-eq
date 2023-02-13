@@ -8,12 +8,12 @@ pub enum Node {
 }
 
 #[derive(Debug, PartialEq)]
-struct VarNode {
+pub struct VarNode {
     val: usize
 }
 
 #[derive(Debug)]
-struct OpNode {
+pub struct OpNode {
     op: Operator,
     children: Vec<Option<ASTNode>>
 }
@@ -22,7 +22,9 @@ type ASTNode = Arc<RwLock<Node>>;
 
 #[derive(Debug)]
 pub struct ASTSession {
-    pub roots: Vec<ASTNode>
+    pub roots: Vec<ASTNode>,
+    pub cases: Vec<Vec<bool>>, // For display only; need to find better way of passing case info back to main for table gen
+    pub results: Vec<Vec<bool>>
 }
 
 impl PartialEq for OpNode {
@@ -52,10 +54,14 @@ impl PartialEq for ASTSession {
 }
 
 pub fn build_ast_session(inputs: &SessionInput) -> ASTSession {
+    let mut res = ASTSession {
+        roots: Vec::new(),
+        cases: Vec::new(),
+        results: Vec::new()
+    };
+
     if inputs.exprs.is_empty() {
-        return ASTSession {
-            roots: Vec::new()
-        }
+        return res;
     }
 
     let mut roots = Vec::with_capacity(inputs.exprs.len());
@@ -85,12 +91,32 @@ pub fn build_ast_session(inputs: &SessionInput) -> ASTSession {
     for expr in inputs.exprs.iter() {
         build_ast(&expr.rpn);
     }
+    res.roots = roots;
+    
+    let cases = get_cases(inputs.ast_order.len());
+    res.cases = cases;
 
-    return ASTSession {
-        roots
-    }
+    let res = evaluate_session_seq(res);
+    res
 }
 
+fn evaluate_session_seq(session: ASTSession) -> ASTSession {
+    let mut results: Vec<Vec<bool>> = Vec::with_capacity(session.cases.len());
+    for case in session.cases.iter() {
+        let mut case_res: Vec<bool> = Vec::with_capacity(session.roots.len());
+        for root in session.roots.iter() {
+            let run_res = root.clone().read().unwrap().evaluate(case);
+            case_res.push(run_res);
+        }
+        results.push(case_res);
+    }
+
+    return ASTSession {
+        roots: session.roots,
+        cases: session.cases,
+        results
+    };
+}
 fn create_var_node(val: usize) -> ASTNode {
     Arc::new(RwLock::new(
         Node::VAR(VarNode{
@@ -140,8 +166,28 @@ mod test {
         let session = crate::parser::create_session(&expr).unwrap();
         let res = build_ast_session(&session);
         let expected = ASTSession {
-            roots: vec![create_op_node(Operator::AND, vec![Some(create_var_node(0)), Some(create_var_node(1))])]
+            roots: vec![create_op_node(Operator::AND, vec![Some(create_var_node(0)), Some(create_var_node(1))])],
+            cases: Vec::new(),
+            results: Vec::new()
         };
         assert_eq!(expected, res)
     }
+}
+
+fn get_cases(n: usize) -> Vec<Vec<bool>> {
+    if n == 0 {
+        return vec![vec![]]
+    }
+
+    let mut perms = Vec::new();
+    for perm in get_cases(n-1) {
+        let mut true_append = perm.clone();
+        let mut false_append = perm;
+        true_append.push(true);
+        false_append.push(false);
+        perms.push(false_append); 
+        perms.push(true_append);
+    }
+
+    perms
 }
