@@ -122,9 +122,16 @@ fn evaluate_session_seq(session: ASTSession) -> ASTSession {
     };
 }
 
-fn evaluate_session_sync(session: ASTSession) -> ASTSession {
-    session
-}
+// fn evaluate_session_sync(session: ASTSession) -> ASTSession {
+//     let mut handles = Vec::with_capacity(session.roots.len());
+//     for case in session.cases.iter() {
+//         let handle = thread::spawn(move || {
+
+//         });
+//     }
+
+//     session
+// }
 
 
 fn create_var_node(val: usize) -> ASTNode {
@@ -158,24 +165,6 @@ impl Node {
     }
 }
 
-#[cfg(test)]
-mod test {
-    use super::*;
-
-    #[test]
-    fn simple_tree() {
-        let expr = vec![String::from("a & b")];
-        let session = crate::parser::create_session(&expr).unwrap();
-        let res = build_ast_session(&session);
-        let expected = ASTSession {
-            roots: vec![create_op_node(Operator::AND, vec![Some(create_var_node(0)), Some(create_var_node(1))])],
-            cases: Vec::new(),
-            results: Vec::new()
-        };
-        assert_eq!(expected, res)
-    }
-}
-
 fn get_cases(n: usize) -> Vec<Vec<bool>> {
     if n == 0 {
         return vec![vec![]]
@@ -192,4 +181,22 @@ fn get_cases(n: usize) -> Vec<Vec<bool>> {
     }
 
     perms
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn simple_tree() {
+        let expr = vec![String::from("a & b")];
+        let session = crate::parser::create_session(&expr).unwrap();
+        let res = build_ast_session(&session);
+        let expected = ASTSession {
+            roots: vec![create_op_node(Operator::AND, vec![Some(create_var_node(0)), Some(create_var_node(1))])],
+            cases: Vec::new(),
+            results: Vec::new()
+        };
+        assert_eq!(expected, res)
+    }
 }

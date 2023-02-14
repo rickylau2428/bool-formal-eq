@@ -15,7 +15,8 @@ mod ast;
 static OPERATORS: [char; 7] = ['&', '|', '^', '!', '~', '(', ')'];
 
 fn main() {
-let raw_inputs = vec![String::from("~a & ~b")];
+    // let raw_inputs = vec![String::from("~a & ~b")];
+    let raw_inputs = vec![String::from("a"), String::from("b")];
     let input = parser::create_session(&raw_inputs).unwrap();
     let res = ast::build_ast_session(&input);
     dbg!(&res);
