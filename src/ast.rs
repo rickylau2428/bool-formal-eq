@@ -1,6 +1,6 @@
 use crate::parser::*;
-use std::sync::{Arc, RwLock, Mutex};
-use std::thread;
+use std::sync::{Arc, RwLock};
+use std::{thread, env};
 
 #[derive(Debug, PartialEq)]
 pub enum Node {
@@ -105,8 +105,12 @@ pub fn build_ast_session(inputs: &SessionInput) -> ASTSession {
     let cases = get_cases(inputs.ast_order.len());
     res.cases = cases;
 
-    let res = evaluate_session_sync(res);
-    res
+    let disallow_thread = env::var("NO_THREAD").is_ok();
+    if disallow_thread {
+        return evaluate_session_seq(res);
+    } else {
+        return evaluate_session_sync(res);
+    }
 }
 
 fn evaluate_session_seq(session: ASTSession) -> ASTSession {
@@ -156,7 +160,8 @@ fn evaluate_session_sync(session: ASTSession) -> ASTSession {
 
             let res = case_res.iter().copied().reduce(|acc, e| acc == e).unwrap();
             if !res && roots.len() != 1 {
-                failure = case_res.clone();
+                failure.append(&mut case.clone());
+                failure.append(&mut case_res.clone());
             }
 
             (case_res, failure)
