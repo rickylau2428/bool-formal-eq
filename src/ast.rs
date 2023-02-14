@@ -1,5 +1,6 @@
 use crate::parser::*;
-use std::sync::{Arc, RwLock};
+use std::sync::{Arc, RwLock, Mutex};
+use std::thread;
 
 #[derive(Debug, PartialEq)]
 pub enum Node {
@@ -24,7 +25,9 @@ type ASTNode = Arc<RwLock<Node>>;
 pub struct ASTSession {
     pub roots: Vec<ASTNode>,
     pub cases: Vec<Vec<bool>>, // For display only; need to find better way of passing case info back to main for table gen
-    pub results: Vec<Vec<bool>>
+    pub results: Vec<Vec<bool>>,
+    pub cex: Vec<Vec<bool>>,
+    pub all_eq: bool
 }
 
 impl PartialEq for OpNode {
@@ -57,7 +60,9 @@ pub fn build_ast_session(inputs: &SessionInput) -> ASTSession {
     let mut res = ASTSession {
         roots: Vec::new(),
         cases: Vec::new(),
-        results: Vec::new()
+        results: Vec::new(),
+        cex: Vec::new(),
+        all_eq: false
     };
 
     if inputs.exprs.is_empty() {
@@ -100,38 +105,83 @@ pub fn build_ast_session(inputs: &SessionInput) -> ASTSession {
     let cases = get_cases(inputs.ast_order.len());
     res.cases = cases;
 
-    let res = evaluate_session_seq(res);
+    let res = evaluate_session_sync(res);
     res
 }
 
 fn evaluate_session_seq(session: ASTSession) -> ASTSession {
     let mut results: Vec<Vec<bool>> = Vec::with_capacity(session.cases.len());
+    let mut cex: Vec<Vec<bool>> = Vec::with_capacity(session.cases.len() / 2); // Arbitary initial size
     for case in session.cases.iter() {
         let mut case_res: Vec<bool> = Vec::with_capacity(session.roots.len());
         for root in session.roots.iter() {
             let run_res = root.clone().read().unwrap().evaluate(case);
             case_res.push(run_res);
         }
+
+        let res = case_res.iter().copied().reduce(|acc, e| acc == e).expect("Reduction failed");
+        if !res {
+            cex.push(case_res.clone());
+        }
+
         results.push(case_res);
     }
 
+    let all_eq = cex.is_empty();
     return ASTSession {
         roots: session.roots,
         cases: session.cases,
-        results
+        results,
+        cex,
+        all_eq
     };
 }
 
-// fn evaluate_session_sync(session: ASTSession) -> ASTSession {
-//     let mut handles = Vec::with_capacity(session.roots.len());
-//     for case in session.cases.iter() {
-//         let handle = thread::spawn(move || {
+fn evaluate_session_sync(session: ASTSession) -> ASTSession {
+    let mut handles = Vec::with_capacity(session.roots.len());
+    let mut results = Vec::with_capacity(session.cases.len());
+    let mut cex = Vec::with_capacity(session.cases.len() / 2);
 
-//         });
-//     }
+    let roots = Arc::new(RwLock::new(session.roots.clone()));
+    for case in session.cases.iter() {
+        let case = case.clone();
+        let roots = roots.clone();
+        let handle = thread::spawn(move || {
+            let roots = roots.read().unwrap();
+            let mut case_res: Vec<bool> = Vec::with_capacity(roots.len());
+            let mut failure: Vec<bool> = Vec::new();
+            for root in roots.iter() {
+                case_res.push(root.clone().read().unwrap().evaluate(&case));
+            }
 
-//     session
-// }
+            let res = case_res.iter().copied().reduce(|acc, e| acc == e).unwrap();
+            if !res && roots.len() != 1 {
+                failure = case_res.clone();
+            }
+
+            (case_res, failure)
+        });
+
+        handles.push(handle);
+    }
+
+    for handle in handles.into_iter() {
+        let (case_res, failure) = handle.join().unwrap();
+        results.push(case_res);
+        if !failure.is_empty() {
+            cex.push(failure);
+        }
+    }
+    let all_eq = cex.is_empty();
+
+    ASTSession {
+        roots: session.roots,
+        cases: session.cases,
+        results,
+        cex,
+        all_eq
+    }
+}
 
 
 fn create_var_node(val: usize) -> ASTNode {
@@ -195,7 +245,9 @@ mod test {
         let expected = ASTSession {
             roots: vec![create_op_node(Operator::AND, vec![Some(create_var_node(0)), Some(create_var_node(1))])],
             cases: Vec::new(),
-            results: Vec::new()
+            results: Vec::new(),
+            cex: Vec::new(),
+            all_eq: true
         };
         assert_eq!(expected, res)
     }
