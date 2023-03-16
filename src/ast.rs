@@ -245,7 +245,7 @@ mod test {
     #[test]
     fn simple_tree() {
         let expr = vec![String::from("a & b")];
-        let session = crate::parser::create_session(&expr).unwrap();
+        let session = crate::parser::create_session(expr).unwrap();
         let res = build_ast_session(&session);
         let expected = ASTSession {
             roots: vec![create_op_node(Operator::AND, vec![Some(create_var_node(0)), Some(create_var_node(1))])],
