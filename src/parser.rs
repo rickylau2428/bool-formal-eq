@@ -7,7 +7,8 @@ pub enum Token {
     VAR(char),
     LParen,
     RParen,
-    OP(Operator)
+    OP(Operator),
+    VAL(bool)
 }
 
 #[derive(Debug, PartialEq, Copy, Clone)]
@@ -31,8 +32,8 @@ pub struct Tokenized {
 }
 
 impl SessionInput {
-    pub fn add_expr(&self, raw_inputs: Vec<String>) -> Result<(), String> {
-        let update_ast_map = |raw: &String| {
+    pub fn add_expr(&mut self, mut raw_inputs: Vec<String>) -> Result<(), String> {
+        let mut update_ast_map = |raw: &String| {
             for c in raw.chars() {
                 if c == ' ' || OPERATORS.contains(&c) || self.ast_order.contains_key(&c) {
                     continue;
@@ -62,18 +63,18 @@ impl SessionInput {
 }
 
 pub fn create_session(raw_inputs: Vec<String>) -> Result<SessionInput, String> {
-    let mut ast_order = LinkedHashMap::new();
+    let ast_order = LinkedHashMap::new();
     let mut _bdd_order = LinkedHashMap::new();
-    let mut exprs = Vec::with_capacity(raw_inputs.len());
+    let exprs = Vec::with_capacity(raw_inputs.len());
 
-    let res = SessionInput {
-        raw_exprs: raw_inputs,
+    let mut res = SessionInput {
+        raw_exprs: Vec::with_capacity(raw_inputs.len()),
         exprs, 
         ast_order,
         bdd_order: _bdd_order
     };
 
-    res.add_expr(raw_inputs);
+    res.add_expr(raw_inputs)?;
     Ok(res)
 }
 

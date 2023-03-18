@@ -63,7 +63,7 @@ impl BDDSession {
         }
     }
 
-    pub fn build(&self, bool_expr: Vec<Token>, var_count: usize) {
+    pub fn build(&self, bool_expr: &Vec<Token>, var_count: usize) {
 
     }
 }
@@ -81,19 +81,50 @@ impl BDDSession {
 
 // }
 
-// fn eval_expr(expr: Vec<Token>) -> Result<BDDVertex, &'static str> {
-//     Err("stub")
-// }
+fn eval_expr(expr: Vec<Token>) -> Result<bool, &'static str> {
+    let mut eval_stack = Vec::new();
 
-// fn sub_constant(bool_expr: &Vec<Token>, ndx: usize, val: bool) {
-//     let out = bool_expr.clone();
-//     for token in out.iter() {
-//         match token {
-//             Token::VAR(c) => {
-                
-//             }
-//         }
-//     }
+    for token in expr.iter() {
+        match token {
+            Token::VAL(b) => eval_stack.push(b.clone()),
+            Token::OP(o) => {
+                if let Operator::NOT = o {
+                    let val = eval_stack.pop().expect("NOT without val in eval_stack");
+                    eval_stack.push(!val);
+                }
 
-// }
+                let right_val = eval_stack.pop().expect("Bin op with 0 arguments");
+                let left_val = eval_stack.pop().expect("Bin op with only 1 argument");
+
+                match o {
+                    Operator::AND => eval_stack.push(right_val & left_val),
+                    Operator::OR => eval_stack.push(right_val | left_val),
+                    Operator::XOR => eval_stack.push(right_val ^ left_val),
+                    _ => return Err("Non-operator token found")
+                }
+            },
+            _ => return Err("Variable found in evaluation")
+        }
+    }
+
+    if eval_stack.len() != 1 {
+        return Err("Unbalanced evaluation of expr")
+    }
+
+   Ok(eval_stack.pop().unwrap())
+}
+
+fn sub_constant(bool_expr: &Vec<Token>, var: char, sub: bool) {
+    let mut out = bool_expr.clone();
+    for token in out.iter_mut() {
+        match token {
+            Token::VAR(c) => {
+                if *c == var {
+                    *token = Token::VAL(sub);
+                }
+            },
+            _ => {}
+        }
+    }
+}
 
