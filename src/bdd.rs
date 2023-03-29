@@ -90,6 +90,36 @@ impl BDDSession {
             return self.make(ndx, lo, hi)
         }
     }
+
+    pub fn satisfy(&self, root_ndx: usize) -> Vec<bool> {
+        let root = self.roots.get(root_ndx).expect("Root not in BDD");
+
+        return self.satisfy_helper(root);
+    }
+
+    fn satisfy_helper(&self, vertex: &BDDVertex) -> Result<Vec<bool>, &'static str> {
+        match **vertex {
+            BDDInner::SINK(b) => {
+                if b { return Err("Function is non-satisfiable")} else { return Ok(Vec::new()); }
+            },
+            BDDInner::VAR(v) => {
+                if *v.lo == BDDInner::SINK(false) {
+                    let calls = self.satisfy_helper(&v.hi).unwrap();
+                    
+                    return Ok(vec![true].append(self.satisfy_helper(root)));
+                }
+
+            }
+        }
+        // if vertex == &BDDInner::SINK(false) {
+        //     return Err("Function is unsatisfiable");
+        // } else if vertex == &BDDInner::SINK(true) {
+        //     return Vec::new();
+        // } else if {
+
+        // }
+
+    }
 }
 
 
