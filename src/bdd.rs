@@ -1,4 +1,4 @@
-use std::rc::{Rc, Weak};
+use std::rc::{Rc};
 use std::collections::HashSet;
 use crate::parser::*;
 
@@ -9,6 +9,7 @@ pub struct BDDSession {
     // node_table: HashMap<usize, BDDVertex>
     unique_table: HashSet<BDDVertex>,
     roots: Vec<BDDVertex>
+    // computed_table
 }
 
 #[derive(PartialEq, Eq, Hash, Clone, Debug)]
@@ -35,10 +36,15 @@ impl BDDSession {
         unique_table.insert(Rc::new(BDDInner::SINK(false)));
         unique_table.insert(Rc::new(BDDInner::SINK(true)));
 
-        BDDSession { unique_table, roots }
+        let mut ret = BDDSession { unique_table, roots };
+        for expr in input.exprs.iter() {
+            ret.build(expr.rpn.clone(), &input.bdd_order);
+        }
+
+        ret
     }
 
-    pub fn init_test(num_vars: usize) -> Self {
+    fn init_test(num_vars: usize) -> Self {
         let mut unique_table = HashSet::with_capacity(num_vars);
         let roots = Vec::with_capacity(num_vars);
         unique_table.insert(Rc::new(BDDInner::SINK(false)));

@@ -23,7 +23,8 @@ pub struct SessionInput {
     raw_exprs: Vec<String>,
     pub exprs: Vec<Tokenized>,
     pub ast_order: LinkedHashMap<char, usize>,
-    pub bdd_order: LinkedHashMap<char, usize>
+    pub bdd_order: Vec<char>
+    // pub bdd_order: LinkedHashMap<char, usize>
 }
 
 pub struct Tokenized {
@@ -64,14 +65,14 @@ impl SessionInput {
 
 pub fn create_session(raw_inputs: Vec<String>) -> Result<SessionInput, String> {
     let ast_order = LinkedHashMap::new();
-    let mut _bdd_order = LinkedHashMap::new();
     let exprs = Vec::with_capacity(raw_inputs.len());
+    let bdd_order = Vec::new();
 
     let mut res = SessionInput {
         raw_exprs: Vec::with_capacity(raw_inputs.len()),
         exprs, 
         ast_order,
-        bdd_order: _bdd_order
+        bdd_order
     };
 
     res.add_expr(raw_inputs)?;
