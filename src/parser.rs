@@ -11,7 +11,7 @@ pub enum Token {
     VAL(bool)
 }
 
-#[derive(Debug, PartialEq, Copy, Clone)]
+#[derive(Debug, PartialEq, Eq, Copy, Clone, Hash)]
 pub enum Operator {
     AND,
     OR,
