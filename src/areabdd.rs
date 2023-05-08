@@ -7,36 +7,38 @@ use std::collections::HashMap;
 use std::rc::Rc;
 use crate::parser::{Operator, SessionInput};
 
+type Edge = isize;
+
 pub struct BDD {
-    vertex_lookup: HashMap<Rc<Vertex>, isize>,
-    id_lookup: HashMap<isize, Rc<Vertex>>,
-    ref_counts: HashMap<isize, isize>,
+    vertex_lookup: HashMap<Rc<Vertex>, usize>,
+    id_lookup: HashMap<usize, Rc<Vertex>>,
+    ref_counts: HashMap<usize, usize>,
     // num_dead: isize
-    roots: Vec<Rc<Vertex>>,
-    computed_cache: HashMap<Expr, isize>,
-    dead_count: isize,
+    roots: Vec<Edge>,
+    computed_cache: HashMap<Expr, Edge>,
+    dead_count: usize,
 }
 
 #[derive(Eq, PartialEq, Hash)]
 pub struct Vertex {
     var: usize,
-    lo: Option<isize>,
-    hi: Option<isize>
+    lo: Option<Edge>,
+    hi: Option<Edge>
 }
 
 #[derive(Eq, PartialEq, Hash)]
 pub struct Expr {
     op: Operator,
-    lhs: isize,
-    rhs: isize
+    lhs: Edge,
+    rhs: Edge
 }
 
 impl BDD {
     pub fn new(input: &SessionInput) -> Self {
-        let mut vertex_lookup: HashMap<Rc<Vertex>, isize> = HashMap::with_capacity(50); // Arbitrary
-        let mut id_lookup: HashMap<isize, Rc<Vertex>> = HashMap::with_capacity(50); // Arbitrary
-        let ref_counts: HashMap<isize, isize> = HashMap::with_capacity(50); // Arbitrary
-        let computed_cache: HashMap<Expr, isize> = HashMap::with_capacity(50); // Arbitrary
+        let mut vertex_lookup: HashMap<Rc<Vertex>, usize> = HashMap::with_capacity(50); // Arbitrary
+        let mut id_lookup: HashMap<usize, Rc<Vertex>> = HashMap::with_capacity(50); // Arbitrary
+        let ref_counts: HashMap<usize, usize> = HashMap::with_capacity(50); // Arbitrary
+        let computed_cache: HashMap<Expr, Edge> = HashMap::with_capacity(50); // Arbitrary
 
         // A terminal node has a variable # 0 and no low or high children
         let terminal_true = Rc::new(Vertex {var: 0, lo: None, hi: None});
@@ -57,29 +59,39 @@ impl BDD {
         }
     }
 
-    fn add(&mut self, vertex: Rc<Vertex>) -> isize {
+    fn add(&mut self, vertex: Rc<Vertex>) -> usize {
         if let Some(ret) = self.vertex_lookup.get(&vertex) {
             return ret.clone();
         } else {
-            let id = isize::try_from(self.vertex_lookup.len()).unwrap();
+            let id = self.vertex_lookup.len();
             self.vertex_lookup.insert(vertex, id);
             return id
         }
 
     }
 
-    pub fn make(&mut self, var: usize, lo: isize, hi: isize) -> isize {
+    pub fn make(&mut self, var: usize, lo: Edge, hi: Edge) -> Edge {
+        // Prevent creation of vertices with complemented high edge
+        let complement_flag: isize = 1;
+        if hi < 0 {
+            if lo < 0 {
+                lo = lo.abs();
+            }
+            hi = hi.abs();
+            complement_flag *= -1;
+        }
+
         if lo == hi {
             return lo;
         }
-        let tmp = Rc::new(Vertex {var, lo: Some(lo), hi: Some(hi)});
+        let mut tmp = Rc::new(Vertex {var, lo: Some(lo), hi: Some(hi)});
         if let Some(ret) = self.vertex_lookup.get(&tmp) {
-            return *ret;
+            return (*ret).try_into().unwrap();
         } else {
-            let id = isize::try_from(self.vertex_lookup.len()).unwrap();
+            let id = self.vertex_lookup.len();
             self.vertex_lookup.insert(Rc::clone(&tmp), id);
             self.id_lookup.insert(id, tmp);
-            return id;
+            return isize::try_from(id).unwrap() * complement_flag;
         }
     }
 
@@ -87,7 +99,7 @@ impl BDD {
         let expr = Expr {op, lhs, rhs};
         if self.computed_cache.contains_key(&expr) {
             let id = self.computed_cache.get(&expr).unwrap();
-            self.inc_ref(id);
+            self.inc_ref(&id.unsigned_abs());
             return *id;
 
         // The following 4 cases are the special cases lifted straight from Bryant; best to refactor at some point later
@@ -137,14 +149,21 @@ impl BDD {
                 _ => panic!("Unary operator NOT is passed into bin op apply")
             }
         } else { // Not in special case; recursively calculating cofactors
+            let lhs_vertex = self.id_lookup.get(&lhs.unsigned_abs()).unwrap();
+            let rhs_vertex = self.id_lookup.get(&rhs.unsigned_abs()).unwrap();
+
+            let min_var = if lhs_vertex.var < rhs_vertex.var { lhs_vertex.var } else { rhs_vertex.var };
+            self.dec_ref(&min_var);
+
             return 0;
+
         }
     }
 
     pub fn apply(&mut self, op: Operator, lhs: isize, rhs: isize) -> isize {
         // Functions passed into apply are no longer roots
-        self.dec_ref(&lhs);
-        self.dec_ref(&rhs);
+        self.dec_ref(&lhs.unsigned_abs());
+        self.dec_ref(&rhs.unsigned_abs());
 
         let parity = lhs * rhs;
         if parity > 0 {
@@ -155,28 +174,28 @@ impl BDD {
     }
 
 
-    fn inc_ref(&mut self, id: &isize) {
+    fn inc_ref(&mut self, id: &usize) {
         let vertex = self.id_lookup.get(id).unwrap();
         match vertex.var {
             1 => return,
             var => {
                 let count = self.ref_counts.get_mut(id).unwrap();
                 *count += 1;
-                self.inc_ref(&vertex.lo.unwrap());
-                self.inc_ref(&vertex.hi.unwrap());
+                self.inc_ref(&vertex.lo.unwrap().unsigned_abs());
+                self.inc_ref(&vertex.hi.unwrap().unsigned_abs());
             }
         }
     }
 
-    fn dec_ref(&mut self, id: &isize) {
+    fn dec_ref(&mut self, id: &usize) {
         let vertex = self.id_lookup.get(id).unwrap();
         match vertex.var {
             1  => return,
             v => {
                 let count = self.ref_counts.get_mut(id).unwrap();
                 *count -= 1;
-                self.dec_ref(&vertex.lo.unwrap());
-                self.dec_ref(&vertex.hi.unwrap());
+                self.dec_ref(&vertex.lo.unwrap().unsigned_abs());
+                self.dec_ref(&vertex.hi.unwrap().unsigned_abs());
                 if *count == 0 {
                     self.dead_count += 1
                 }
