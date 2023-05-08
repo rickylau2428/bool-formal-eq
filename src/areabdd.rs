@@ -5,52 +5,44 @@
 
 use std::collections::HashMap;
 use std::rc::Rc;
-use crate::parser;
+use crate::parser::{Operator, SessionInput};
 
 pub struct BDD {
-    vertex_lookup: HashMap<Rc<Vertex>, usize>,
-    id_lookup: HashMap<usize, Rc<Vertex>>,
-    ref_counts: HashMap<usize, usize>,
-    // num_dead: usize
+    vertex_lookup: HashMap<Rc<Vertex>, isize>,
+    id_lookup: HashMap<isize, Rc<Vertex>>,
+    ref_counts: HashMap<isize, isize>,
+    // num_dead: isize
     roots: Vec<Rc<Vertex>>,
-    computed_cache: HashMap<Expr, usize>
+    computed_cache: HashMap<Expr, isize>,
+    dead_count: isize,
 }
 
 #[derive(Eq, PartialEq, Hash)]
 pub struct Vertex {
-    var: VAL,
-    lo: Option<usize>,
-    hi: Option<usize>
-}
-
-#[derive(Eq, PartialEq, Hash)]
-pub enum VAL {
-    SINK(bool),
-    VAR(usize)
+    var: usize,
+    lo: Option<isize>,
+    hi: Option<isize>
 }
 
 #[derive(Eq, PartialEq, Hash)]
 pub struct Expr {
-    op: parser::Operator,
-    lhs: usize,
-    rhs: usize
+    op: Operator,
+    lhs: isize,
+    rhs: isize
 }
 
 impl BDD {
-    pub fn new(input: &parser::SessionInput) -> Self {
-        let mut vertex_lookup: HashMap<Rc<Vertex>, usize> = HashMap::with_capacity(50); // Arbitrary
-        let mut id_lookup: HashMap<usize, Rc<Vertex>> = HashMap::with_capacity(50); // Arbitrary
-        let ref_counts: HashMap<usize, usize> = HashMap::with_capacity(50); // Arbitrary
-        let computed_cache: HashMap<Expr, usize> = HashMap::with_capacity(50); // Arbitrary
+    pub fn new(input: &SessionInput) -> Self {
+        let mut vertex_lookup: HashMap<Rc<Vertex>, isize> = HashMap::with_capacity(50); // Arbitrary
+        let mut id_lookup: HashMap<isize, Rc<Vertex>> = HashMap::with_capacity(50); // Arbitrary
+        let ref_counts: HashMap<isize, isize> = HashMap::with_capacity(50); // Arbitrary
+        let computed_cache: HashMap<Expr, isize> = HashMap::with_capacity(50); // Arbitrary
 
-        // Initialize sinks
-        let terminal_false = Rc::new(Vertex {var: VAL::SINK(false), lo: None, hi: None});
-        let terminal_true = Rc::new(Vertex {var: VAL::SINK(true), lo: None, hi: None});
+        // A terminal node has a variable # 0 and no low or high children
+        let terminal_true = Rc::new(Vertex {var: 0, lo: None, hi: None});
 
-        vertex_lookup.insert(Rc::clone(&terminal_false), 0);
+        // A terminal node has an ID of 1
         vertex_lookup.insert(Rc::clone(&terminal_true), 1);
-
-        id_lookup.insert(0, terminal_false);
         id_lookup.insert(1, terminal_true);
 
         let roots = Vec::new();
@@ -60,71 +52,151 @@ impl BDD {
             id_lookup,
             ref_counts,
             roots,
-            computed_cache
+            computed_cache,
+            dead_count: 0
         }
     }
 
-    fn add(&mut self, vertex: Rc<Vertex>) -> usize {
+    fn add(&mut self, vertex: Rc<Vertex>) -> isize {
         if let Some(ret) = self.vertex_lookup.get(&vertex) {
             return ret.clone();
         } else {
-            let id = self.vertex_lookup.len();
+            let id = isize::try_from(self.vertex_lookup.len()).unwrap();
             self.vertex_lookup.insert(vertex, id);
             return id
         }
 
     }
 
-    pub fn make(&mut self, var: usize, lo: usize, hi: usize) -> usize {
+    pub fn make(&mut self, var: usize, lo: isize, hi: isize) -> isize {
         if lo == hi {
             return lo;
         }
-
-        let tmp = Rc::new(Vertex {var: VAL::VAR(var), lo: Some(lo), hi: Some(hi)});
+        let tmp = Rc::new(Vertex {var, lo: Some(lo), hi: Some(hi)});
         if let Some(ret) = self.vertex_lookup.get(&tmp) {
             return *ret;
         } else {
-            let id = self.vertex_lookup.len();
+            let id = isize::try_from(self.vertex_lookup.len()).unwrap();
             self.vertex_lookup.insert(Rc::clone(&tmp), id);
             self.id_lookup.insert(id, tmp);
             return id;
         }
     }
 
-    pub fn apply(&mut self, op: parser::Operator, lhs: usize, rhs: usize) {
+    fn apply_helper(&mut self, op: Operator, lhs: isize, rhs: isize, complemented: bool) -> isize {
         let expr = Expr {op, lhs, rhs};
         if self.computed_cache.contains_key(&expr) {
-            
-            return 
-        }
+            let id = self.computed_cache.get(&expr).unwrap();
+            self.inc_ref(id);
+            return *id;
 
-    }
-
-
-    fn add_ref(&mut self, id: usize) {
-        if let Some(count) = self.ref_counts.get_mut(&id) {
-            *count += 1;
-        } else {
-            panic!("Attempted to increment ref_count of non-existent id");
-        }
-    }
-
-    fn dec_ref(&mut self, id: usize) {
-        if let Some(count) = self.ref_counts.get_mut(&id) {
-            *count -= 1;
-            if *count == 0 {
-                let to_remove = self.id_lookup.get(count).unwrap();
-                self.vertex_lookup.remove(to_remove);
-                self.id_lookup.remove(&id);
-                
+        // The following 4 cases are the special cases lifted straight from Bryant; best to refactor at some point later
+        } else if lhs.abs() == 1 && rhs.abs() == 1 { // Both LHS and RHS are leaves
+            let lhs_val = get_id_bool(lhs);
+            let rhs_val = get_id_bool(rhs);
+            if complemented {
+                // By De Morgan's Law: ~a && ~b == ~(a || b)
+                match op {
+                    Operator::AND => get_const_id(!(lhs_val || rhs_val)),
+                    Operator::OR => get_const_id(!(lhs_val && rhs_val)),
+                    Operator::XOR => get_const_id(lhs_val ^ rhs_val),
+                    _ => panic!("Unary operator NOT is passed into bin op apply")
+                } 
+            } else {
+                match op {
+                    Operator::AND => get_const_id(lhs_val && rhs_val),
+                    Operator::OR => get_const_id(lhs_val || rhs_val),
+                    Operator::XOR => get_const_id(lhs_val ^ rhs_val),
+                    _ => panic!("Unary operator NOT is passed into bin op apply")
+                } 
             }
+        } else if lhs.abs() == 1 || rhs.abs() == 1 { // Either only one of LHS or RHS are leaves
+            match (op, lhs, rhs) {
+                (Operator::AND, -1, _) | (Operator::AND, _, -1) =>  -1,
+                (Operator::AND, 1, rhs) => rhs,
+                (Operator::AND, lhs, 1) => lhs,
+                (Operator::OR, 1, _) | (Operator::OR, _, 1) => 1,
+                (Operator::OR, -1, rhs) => rhs,
+                (Operator::OR, lhs, -1) => lhs,
+                (Operator::XOR, 1, rhs) => -rhs,
+                (Operator::XOR, lhs, 1) => -lhs,
+                (Operator::XOR, -1, rhs) => rhs,
+                (Operator::XOR, lhs, -1) => lhs
+            }
+        } else if lhs == rhs { // LHS is equivalent to RHS
+            match op {
+                Operator::AND => lhs,
+                Operator::OR => 1,
+                Operator::XOR => -1,
+                _ => panic!("Unary operator NOT is passed into bin op apply")
+            }
+        } else if lhs.abs() == rhs.abs() { // LHS and RHS are complements to each other
+            match op {
+                Operator::AND => -1,
+                Operator::OR | Operator::XOR => 1,
+                _ => panic!("Unary operator NOT is passed into bin op apply")
+            }
+        } else { // Not in special case; recursively calculating cofactors
+            return 0;
+        }
+    }
+
+    pub fn apply(&mut self, op: Operator, lhs: isize, rhs: isize) -> isize {
+        // Functions passed into apply are no longer roots
+        self.dec_ref(&lhs);
+        self.dec_ref(&rhs);
+
+        let parity = lhs * rhs;
+        if parity > 0 {
+            return self.apply_helper(op, lhs, rhs, false);
         } else {
-            panic!("Attempted to increment ref_count of non-existent id");
+            return self.apply_helper(op, lhs, rhs, true);
+        }
+    }
+
+
+    fn inc_ref(&mut self, id: &isize) {
+        let vertex = self.id_lookup.get(id).unwrap();
+        match vertex.var {
+            1 => return,
+            var => {
+                let count = self.ref_counts.get_mut(id).unwrap();
+                *count += 1;
+                self.inc_ref(&vertex.lo.unwrap());
+                self.inc_ref(&vertex.hi.unwrap());
+            }
+        }
+    }
+
+    fn dec_ref(&mut self, id: &isize) {
+        let vertex = self.id_lookup.get(id).unwrap();
+        match vertex.var {
+            1  => return,
+            v => {
+                let count = self.ref_counts.get_mut(id).unwrap();
+                *count -= 1;
+                self.dec_ref(&vertex.lo.unwrap());
+                self.dec_ref(&vertex.hi.unwrap());
+                if *count == 0 {
+                    self.dead_count += 1
+                }
+            }
         }
     }
 
 }
 
+fn get_const_id(val: bool) -> isize {
+    if val {
+        return 1
+    } else {
+        return -1
+    }
+}
+
+fn get_id_bool(val: isize) -> bool {
+    return val == 1
+}
 
 // use crate::parser::*;
 // use std::collections::HashSet;
