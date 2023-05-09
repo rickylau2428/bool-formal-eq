@@ -8,11 +8,12 @@ use std::rc::Rc;
 use crate::parser::{Operator, SessionInput};
 
 type Edge = isize;
+type ID = isize;
 
 pub struct BDD {
-    vertex_lookup: HashMap<Rc<Vertex>, usize>,
-    id_lookup: HashMap<usize, Rc<Vertex>>,
-    ref_counts: HashMap<usize, usize>,
+    vertex_lookup: HashMap<Rc<Vertex>, ID>,
+    id_lookup: HashMap<ID, Rc<Vertex>>,
+    ref_counts: HashMap<ID, usize>,
     // num_dead: isize
     roots: Vec<Edge>,
     computed_cache: HashMap<Expr, Edge>,
@@ -21,7 +22,7 @@ pub struct BDD {
 
 #[derive(Eq, PartialEq, Hash)]
 pub struct Vertex {
-    var: usize,
+    var: isize, // This value should never be < 1
     lo: Option<Edge>,
     hi: Option<Edge>
 }
@@ -35,9 +36,9 @@ pub struct Expr {
 
 impl BDD {
     pub fn new(input: &SessionInput) -> Self {
-        let mut vertex_lookup: HashMap<Rc<Vertex>, usize> = HashMap::with_capacity(50); // Arbitrary
-        let mut id_lookup: HashMap<usize, Rc<Vertex>> = HashMap::with_capacity(50); // Arbitrary
-        let ref_counts: HashMap<usize, usize> = HashMap::with_capacity(50); // Arbitrary
+        let mut vertex_lookup: HashMap<Rc<Vertex>, ID> = HashMap::with_capacity(50); // Arbitrary
+        let mut id_lookup: HashMap<ID, Rc<Vertex>> = HashMap::with_capacity(50); // Arbitrary
+        let ref_counts: HashMap<ID, usize> = HashMap::with_capacity(50); // Arbitrary
         let computed_cache: HashMap<Expr, Edge> = HashMap::with_capacity(50); // Arbitrary
 
         // A terminal node has a variable # 0 and no low or high children
@@ -59,18 +60,18 @@ impl BDD {
         }
     }
 
-    fn add(&mut self, vertex: Rc<Vertex>) -> usize {
+    fn add(&mut self, vertex: Rc<Vertex>) -> ID {
         if let Some(ret) = self.vertex_lookup.get(&vertex) {
             return ret.clone();
         } else {
-            let id = self.vertex_lookup.len();
+            let id = isize::try_from(self.vertex_lookup.len()).unwrap();
             self.vertex_lookup.insert(vertex, id);
-            return id
+            return id;
         }
 
     }
 
-    pub fn make(&mut self, var: usize, lo: Edge, hi: Edge) -> Edge {
+    pub fn make(&mut self, var: isize, lo: Edge, hi: Edge) -> Edge {
         // Prevent creation of vertices with complemented high edge
         let complement_flag: isize = 1;
         if hi < 0 {
@@ -84,11 +85,13 @@ impl BDD {
         if lo == hi {
             return lo;
         }
+
+        assert!(var > 0); // Variables should always be greater than 0
         let mut tmp = Rc::new(Vertex {var, lo: Some(lo), hi: Some(hi)});
         if let Some(ret) = self.vertex_lookup.get(&tmp) {
             return (*ret).try_into().unwrap();
         } else {
-            let id = self.vertex_lookup.len();
+            let id = isize::try_from(self.vertex_lookup.len()).unwrap();
             self.vertex_lookup.insert(Rc::clone(&tmp), id);
             self.id_lookup.insert(id, tmp);
             return isize::try_from(id).unwrap() * complement_flag;
@@ -99,7 +102,7 @@ impl BDD {
         let expr = Expr {op, lhs, rhs};
         if self.computed_cache.contains_key(&expr) {
             let id = self.computed_cache.get(&expr).unwrap();
-            self.inc_ref(&id.unsigned_abs());
+            self.inc_ref(&id);
             return *id;
 
         // The following 4 cases are the special cases lifted straight from Bryant; best to refactor at some point later
@@ -123,17 +126,20 @@ impl BDD {
                 } 
             }
         } else if lhs.abs() == 1 || rhs.abs() == 1 { // Either only one of LHS or RHS are leaves
-            match (op, lhs, rhs) {
-                (Operator::AND, -1, _) | (Operator::AND, _, -1) =>  -1,
-                (Operator::AND, 1, rhs) => rhs,
-                (Operator::AND, lhs, 1) => lhs,
-                (Operator::OR, 1, _) | (Operator::OR, _, 1) => 1,
-                (Operator::OR, -1, rhs) => rhs,
-                (Operator::OR, lhs, -1) => lhs,
-                (Operator::XOR, 1, rhs) => -rhs,
-                (Operator::XOR, lhs, 1) => -lhs,
-                (Operator::XOR, -1, rhs) => rhs,
-                (Operator::XOR, lhs, -1) => lhs
+            if complemented { // The leaf is the 0-terminal (complemented 1-terminal)
+                match (op, lhs, rhs) {
+                    (Operator::AND, 1|-1, _) | (Operator::AND, _, 1|-1) => -1,
+                    (Operator::OR | Operator::XOR, 1|-1, rhs) => rhs,
+                    (Operator::OR | Operator::XOR, lhs, 1|-1) => lhs
+                }
+            } else {
+                match (op, lhs, rhs) {
+                    (Operator::AND, 1|-1, rhs) => rhs,
+                    (Operator::AND, lhs, 1|-1) => lhs,
+                    (Operator::OR, 1|-1, _) | (Operator::OR, _, 1|-1) => 1,
+                    (Operator::XOR, 1|-1, rhs) => -rhs,
+                    (Operator::XOR, lhs, 1|-1) => -lhs
+                }
             }
         } else if lhs == rhs { // LHS is equivalent to RHS
             match op {
@@ -149,21 +155,45 @@ impl BDD {
                 _ => panic!("Unary operator NOT is passed into bin op apply")
             }
         } else { // Not in special case; recursively calculating cofactors
-            let lhs_vertex = self.id_lookup.get(&lhs.unsigned_abs()).unwrap();
-            let rhs_vertex = self.id_lookup.get(&rhs.unsigned_abs()).unwrap();
+            let lhs_vertex = self.id_lookup.get(&lhs).unwrap();
+            let rhs_vertex = self.id_lookup.get(&rhs).unwrap();
 
-            let min_var = if lhs_vertex.var < rhs_vertex.var { lhs_vertex.var } else { rhs_vertex.var };
-            self.dec_ref(&min_var);
+            let lhs_var: isize = lhs_vertex.var;
+            let rhs_var: isize = rhs_vertex.var;
+            let min_var: isize = if lhs_var < rhs_var { lhs_var } else { rhs_var };
 
-            return 0;
+            let (mut lhs_lo, mut lhs_hi) = (lhs_var, lhs_var);
+            let (mut rhs_lo, mut rhs_hi) = (rhs_var, rhs_var);
+            if lhs_var == min_var {
+                self.dec_ref(&lhs);
+                (lhs_lo, lhs_hi) = (lhs_vertex.lo.unwrap(), lhs_vertex.hi.unwrap());
+            }
+
+            if rhs_var == min_var {
+                self.dec_ref(&rhs);
+                (rhs_lo, rhs_hi) = (rhs_vertex.lo.unwrap(), rhs_vertex.hi.unwrap());
+            }
+
+            let hi_cofactor = self.apply_helper(op, lhs_hi, rhs_hi, complemented);
+
+            if lhs_lo < 0 {
+                complemented = !complemented;
+            }
+            let lo_cofactor = self.apply_helper(op, lhs_lo, rhs_lo, complemented);
+
+            let res: isize = 0;
+            res = self.make(min_var, lo_cofactor, hi_cofactor);
+
+            self.computed_cache.insert(Expr {op, lhs, rhs}, res);
+            return res;
 
         }
     }
 
     pub fn apply(&mut self, op: Operator, lhs: isize, rhs: isize) -> isize {
         // Functions passed into apply are no longer roots
-        self.dec_ref(&lhs.unsigned_abs());
-        self.dec_ref(&rhs.unsigned_abs());
+        self.dec_ref(&lhs);
+        self.dec_ref(&rhs);
 
         let parity = lhs * rhs;
         if parity > 0 {
@@ -173,29 +203,28 @@ impl BDD {
         }
     }
 
-
-    fn inc_ref(&mut self, id: &usize) {
+    fn inc_ref(&mut self, id: &isize) {
         let vertex = self.id_lookup.get(id).unwrap();
         match vertex.var {
             1 => return,
             var => {
                 let count = self.ref_counts.get_mut(id).unwrap();
                 *count += 1;
-                self.inc_ref(&vertex.lo.unwrap().unsigned_abs());
-                self.inc_ref(&vertex.hi.unwrap().unsigned_abs());
+                self.inc_ref(&vertex.lo.unwrap());
+                self.inc_ref(&vertex.hi.unwrap());
             }
         }
     }
 
-    fn dec_ref(&mut self, id: &usize) {
+    fn dec_ref(&mut self, id: &isize) {
         let vertex = self.id_lookup.get(id).unwrap();
         match vertex.var {
             1  => return,
             v => {
                 let count = self.ref_counts.get_mut(id).unwrap();
                 *count -= 1;
-                self.dec_ref(&vertex.lo.unwrap().unsigned_abs());
-                self.dec_ref(&vertex.hi.unwrap().unsigned_abs());
+                self.dec_ref(&vertex.lo.unwrap());
+                self.dec_ref(&vertex.hi.unwrap());
                 if *count == 0 {
                     self.dead_count += 1
                 }
