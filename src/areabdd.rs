@@ -3,14 +3,14 @@
 // Come up with ratio (maybe half?) for when region should be re-allocated and things reassigned
 // This may also be a good time to consider a BDD re-ordering? (If doing dynamic ordering)
 
-use std::collections::HashMap;
+use std::{collections::HashMap, arch::x86_64::_MM_EXCEPT_INEXACT};
 use std::rc::Rc;
 use crate::parser::{Operator, SessionInput};
 
 type Edge = isize;
 type ID = isize;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct BDD {
     vertex_lookup: HashMap<Rc<Vertex>, ID>,
     id_lookup: HashMap<ID, Rc<Vertex>>,
@@ -20,14 +20,14 @@ pub struct BDD {
     dead_count: usize,
 }
 
-#[derive(Eq, PartialEq, Hash, Debug)]
+#[derive(Eq, PartialEq, Hash, Debug, Clone, Copy)]
 pub struct Vertex {
     var: isize, // This value should never be < 1 for non-terminal nodes
     lo: Option<Edge>,
     hi: Option<Edge>
 }
 
-#[derive(Eq, PartialEq, Hash, Debug)]
+#[derive(Eq, PartialEq, Hash, Debug, Clone, Copy)]
 pub struct Expr {
     op: Operator,
     lhs: Edge,
@@ -94,8 +94,8 @@ impl BDD {
 
     pub fn apply(&mut self, op: Operator, lhs: isize, rhs: isize) -> isize {
         // Functions passed into apply are no longer roots
-        dec_ref(self, &lhs);
-        dec_ref(self, &rhs);
+        // dec_ref(self, &lhs);
+        // dec_ref(self, &rhs);
 
         let parity = lhs * rhs;
         if parity > 0 {
@@ -106,6 +106,8 @@ impl BDD {
     }
 
     fn apply_helper(&mut self, op: Operator, lhs: isize, rhs: isize, mut complemented: bool) -> isize {
+        dbg!(&lhs);
+        dbg!(&rhs);
         let expr = Expr {op, lhs, rhs};
         if self.computed_cache.contains_key(&expr) {
             let id = *self.computed_cache.get(&expr).unwrap();
@@ -138,6 +140,8 @@ impl BDD {
                     _ => panic!("Encountered invalid case in apply")
                 }
             } else {
+                // dbg!(&lhs);
+                // dbg!(&rhs);
                 match (op, lhs, rhs) { // The leaf is the 1-terminal (not complemented)
                     (Operator::AND, 1|-1, rhs) => rhs,
                     (Operator::AND, lhs, 1|-1) => lhs,
@@ -161,15 +165,15 @@ impl BDD {
                 _ => panic!("Unary operator NOT is passed into bin op apply")
             }
         } else { // Not in special case; recursively calculating cofactors
-            let lhs_vertex = Rc::clone(self.id_lookup.get(&lhs).unwrap());
-            let rhs_vertex = Rc::clone(self.id_lookup.get(&rhs).unwrap());
+            let lhs_vertex = Rc::clone(self.id_lookup.get(&lhs.abs()).unwrap());
+            let rhs_vertex = Rc::clone(self.id_lookup.get(&rhs.abs()).unwrap());
 
             let lhs_var: isize = lhs_vertex.var;
             let rhs_var: isize = rhs_vertex.var;
             let min_var: isize = if lhs_var < rhs_var { lhs_var } else { rhs_var };
 
-            let (mut lhs_lo, mut lhs_hi) = (lhs_var, lhs_var);
-            let (mut rhs_lo, mut rhs_hi) = (rhs_var, rhs_var);
+            let (mut lhs_lo, mut lhs_hi) = (lhs, lhs);
+            let (mut rhs_lo, mut rhs_hi) = (rhs, rhs);
             if lhs_var == min_var {
                 (lhs_lo, lhs_hi) = (lhs_vertex.lo.unwrap(), lhs_vertex.hi.unwrap());
                 dec_ref(self, &lhs); // dec_ref the root(s) that is being split
@@ -219,7 +223,8 @@ impl PartialEq for BDD {
        return map_eq(&self.vertex_lookup, &other.vertex_lookup) &&
               map_eq(&self.id_lookup, &other.id_lookup) &&
               map_eq(&self.ref_counts, &other.ref_counts) &&
-              map_eq(&self.computed_cache, &other.computed_cache);
+              map_eq(&self.computed_cache, &other.computed_cache) &&
+              self.dead_count == other.dead_count;
     }
 
 }
@@ -237,11 +242,13 @@ fn get_id_bool(val: isize) -> bool {
 }
 
 fn inc_ref (bdd: &mut BDD, id: &isize) {
-    let vertex = Rc::clone(bdd.id_lookup.get(id).unwrap());
+    let abs_id = id.abs();
+
+    let vertex = Rc::clone(bdd.id_lookup.get(&abs_id).unwrap());
     match vertex.var {
         0 => return,
         _ => {
-            let count = bdd.ref_counts.get_mut(id).unwrap();
+            let count = bdd.ref_counts.get_mut(&abs_id).unwrap();
             *count += 1;
             inc_ref(bdd, &vertex.lo.unwrap());
             inc_ref(bdd, &vertex.hi.unwrap());
@@ -250,11 +257,13 @@ fn inc_ref (bdd: &mut BDD, id: &isize) {
 }
 
 fn dec_ref(bdd: &mut BDD, id: &isize) {
-    let vertex = Rc::clone(bdd.id_lookup.get(id).unwrap());
+    let abs_id = id.abs();
+
+    let vertex = Rc::clone(bdd.id_lookup.get(&abs_id).unwrap());
     match vertex.var {
         0  => return,
         _ => {
-            let count = bdd.ref_counts.get_mut(id).unwrap();
+            let count = bdd.ref_counts.get_mut(&abs_id).unwrap();
             *count -= 1;
 
             if *count == 0 {
@@ -293,7 +302,77 @@ mod test {
 
     #[test]
     fn apply_test() {
+        let mut actual = BDD::new();
 
+        actual.make(1, -1, 1);
+        actual.make(2, -1, 1);
+        // dbg!(&actual);
+        let mut expected = actual.clone();
+
+        let expected_node = Rc::new(Vertex {var:1, lo: Some(-1), hi: Some(3)});
+        expected.vertex_lookup.insert(expected_node.clone(), 4);
+        expected.id_lookup.insert(4, expected_node);
+        expected.computed_cache.insert(Expr {op: Operator::AND, lhs: 2, rhs: 3}, 4);
+        let rc = expected.ref_counts.get_mut(&2).unwrap();
+        *rc = 0;
+        expected.ref_counts.insert(4, 1);
+        expected.dead_count = 1;
+
+        let actual_id = actual.apply(Operator::AND, 2, 3);
+        dbg!(&expected.vertex_lookup);
+        dbg!(&actual.vertex_lookup);
+        assert!(expected == actual);
+        assert!(4 == actual_id);
+    }
+
+    #[test]
+    fn apply_xor() {
+        let mut actual = BDD::new();
+
+        actual.make(1, -1, 1);
+        actual.make(2, -1, 1);
+        // dbg!(&actual);
+        let mut expected = actual.clone();
+
+        let expected_node = Rc::new(Vertex {var:1, lo: Some(-3), hi: Some(3)});
+        expected.vertex_lookup.insert(expected_node.clone(), 4);
+        expected.id_lookup.insert(4, expected_node);
+        expected.computed_cache.insert(Expr {op: Operator::XOR, lhs: -2, rhs: 3}, 4);
+        let rc = expected.ref_counts.get_mut(&2).unwrap();
+        *rc = 0;
+        expected.ref_counts.insert(4, 1);
+        expected.dead_count = 1;
+
+        let actual_id = actual.apply(Operator::XOR, -2, 3);
+        dbg!(&expected);
+        dbg!(&actual);
+        assert_eq!(expected, actual);
+        assert!(4 == actual_id);
+    }
+
+    #[test]
+    fn apply_returns_complemented() {
+        let mut actual = BDD::new();
+
+        actual.make(1, -1, 1);
+        actual.make(2, -1, 1);
+        // dbg!(&actual);
+        let mut expected = actual.clone();
+
+        let expected_node = Rc::new(Vertex {var:1, lo: Some(-3), hi: Some(3)});
+        expected.vertex_lookup.insert(expected_node.clone(), 4);
+        expected.id_lookup.insert(4, expected_node);
+        expected.computed_cache.insert(Expr {op: Operator::XOR, lhs: 2, rhs: 3}, -4);
+        let rc = expected.ref_counts.get_mut(&2).unwrap();
+        *rc = 0;
+        expected.ref_counts.insert(4, 1);
+        expected.dead_count = 1;
+
+        let actual_id = actual.apply(Operator::XOR, 2, 3);
+        dbg!(&expected);
+        dbg!(&actual);
+        assert_eq!(expected, actual);
+        assert!(-4 == actual_id);
     }
 
 }
