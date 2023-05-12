@@ -3,10 +3,13 @@ use tabled::{builder::Builder, ModifyObject, object::Rows, Alignment, Style};
 
 mod parser;
 mod ast;
+// mod bdd;
+mod areabdd;
 
 fn main() {
+
     let raw_inputs = get_user_input();
-    let input = parser::create_session(&raw_inputs).unwrap();
+    let input = parser::create_session(raw_inputs.clone()).unwrap();
     let ast_session = ast::build_ast_session(&input);
 
     let mut truth_table = Builder::default();

@@ -7,10 +7,11 @@ pub enum Token {
     VAR(char),
     LParen,
     RParen,
-    OP(Operator)
+    OP(Operator),
+    VAL(bool)
 }
 
-#[derive(Debug, PartialEq, Copy, Clone)]
+#[derive(Debug, PartialEq, Eq, Copy, Clone, Hash)]
 pub enum Operator {
     AND,
     OR,
@@ -19,9 +20,11 @@ pub enum Operator {
 }
 
 pub struct SessionInput {
+    raw_exprs: Vec<String>,
     pub exprs: Vec<Tokenized>,
     pub ast_order: LinkedHashMap<char, usize>,
-    pub bdd_order: LinkedHashMap<char, usize>
+    pub bdd_order: Vec<char>
+    // pub bdd_order: LinkedHashMap<char, usize>
 }
 
 pub struct Tokenized {
@@ -29,36 +32,55 @@ pub struct Tokenized {
     pub tokens: Vec<Token>
 }
 
-pub fn create_session(raw_inputs: &Vec<String>) -> Result<SessionInput, String> {
-    let mut ast_order = LinkedHashMap::new();
-    let mut _bdd_order = LinkedHashMap::new();
-    let mut exprs = Vec::with_capacity(raw_inputs.len());
-
-    let mut update_ast_map = |raw: &String| {
-        for c in raw.chars() {
-            if c == ' ' || OPERATORS.contains(&c) || ast_order.contains_key(&c) {
-                continue;
-            } else if c.is_ascii_alphabetic() {
-                ast_order.insert(c, ast_order.len());
+impl SessionInput {
+    pub fn add_expr(&mut self, mut raw_inputs: Vec<String>) -> Result<(), String> {
+        let mut update_ast_map = |raw: &String| {
+            for c in raw.chars() {
+                if c == ' ' || OPERATORS.contains(&c) || self.ast_order.contains_key(&c) {
+                    continue;
+                } else if c.is_ascii_alphabetic() {
+                    self.ast_order.insert(c, self.ast_order.len());
+                }
             }
-        }
-    };
+        };
 
-    for input in raw_inputs.iter() {
-        let tokenized = parse_expr(input)?;
-        exprs.push(tokenized);
-        update_ast_map(input);
+        for input in raw_inputs.iter() {
+            let tokenized = parse_expr(input)?;
+            self.exprs.push(tokenized);
+            update_ast_map(input);
+        };
+
+        self.raw_exprs.append(&mut raw_inputs);
+
+        Ok(())
     }
 
-    Ok(SessionInput {
-        exprs,
+    pub fn list_expr(&self) {
+        for expr in self.raw_exprs.iter() {
+            println!("{}", expr);
+        }
+    }
+
+}
+
+pub fn create_session(raw_inputs: Vec<String>) -> Result<SessionInput, String> {
+    let ast_order = LinkedHashMap::new();
+    let exprs = Vec::with_capacity(raw_inputs.len());
+    let bdd_order = Vec::new();
+
+    let mut res = SessionInput {
+        raw_exprs: Vec::with_capacity(raw_inputs.len()),
+        exprs, 
         ast_order,
-        bdd_order: _bdd_order
-    })
+        bdd_order
+    };
+
+    res.add_expr(raw_inputs)?;
+    Ok(res)
 }
 
 fn parse_expr(input: &String) -> Result<Tokenized, String> {
-    let tokens = tokenize(input)?;
+    let tokens = tokenize(&input)?;
     let rpn = convert_rpn(&tokens)?;
 
     Ok(Tokenized {
