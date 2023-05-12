@@ -3,7 +3,7 @@ use tabled::{builder::Builder, ModifyObject, object::Rows, Alignment, Style};
 
 mod parser;
 mod ast;
-mod bdd;
+// mod bdd;
 mod areabdd;
 
 fn main() {
