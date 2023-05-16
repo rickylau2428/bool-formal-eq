@@ -19,7 +19,7 @@ pub enum Operator {
     NOT
 }
 
-pub struct SessionInput {
+pub struct Parser {
     raw_exprs: Vec<String>,
     pub exprs: Vec<Tokenized>,
     pub ast_order: LinkedHashMap<char, usize>,
@@ -32,7 +32,7 @@ pub struct Tokenized {
     pub tokens: Vec<Token>
 }
 
-impl SessionInput {
+impl Parser {
     pub fn add_expr(&mut self, mut raw_inputs: Vec<String>) -> Result<(), String> {
         let mut update_ast_map = |raw: &String| {
             for c in raw.chars() {
@@ -63,12 +63,12 @@ impl SessionInput {
 
 }
 
-pub fn create_session(raw_inputs: Vec<String>) -> Result<SessionInput, String> {
+pub fn create_session(raw_inputs: Vec<String>) -> Result<Parser, String> {
     let ast_order = LinkedHashMap::new();
     let exprs = Vec::with_capacity(raw_inputs.len());
     let bdd_order = Vec::new();
 
-    let mut res = SessionInput {
+    let mut res = Parser {
         raw_exprs: Vec::with_capacity(raw_inputs.len()),
         exprs, 
         ast_order,

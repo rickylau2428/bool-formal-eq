@@ -56,7 +56,7 @@ impl PartialEq for ASTSession {
     }
 }
 
-pub fn build_ast_session(inputs: &SessionInput) -> ASTSession {
+pub fn build_ast_session(inputs: &Parser) -> ASTSession {
     let mut res = ASTSession {
         roots: Vec::new(),
         cases: Vec::new(),

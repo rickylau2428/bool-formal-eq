@@ -3,9 +3,9 @@
 // Come up with ratio (maybe half?) for when region should be re-allocated and things reassigned
 // This may also be a good time to consider a BDD re-ordering? (If doing dynamic ordering)
 
-use std::{collections::HashMap, arch::x86_64::_MM_EXCEPT_INEXACT};
+use std::collections::HashMap;
 use std::rc::Rc;
-use crate::parser::{Operator, SessionInput};
+use crate::parser::{Operator, Parser, Token};
 
 type Edge = isize;
 type ID = isize;
@@ -106,8 +106,8 @@ impl BDD {
     }
 
     fn apply_helper(&mut self, op: Operator, lhs: isize, rhs: isize, mut complemented: bool) -> isize {
-        dbg!(&lhs);
-        dbg!(&rhs);
+        // dbg!(&lhs);
+        // dbg!(&rhs);
         let expr = Expr {op, lhs, rhs};
         if self.computed_cache.contains_key(&expr) {
             let id = *self.computed_cache.get(&expr).unwrap();
@@ -275,6 +275,57 @@ fn dec_ref(bdd: &mut BDD, id: &isize) {
         }
     }
 }
+
+// build takes as input a Parser with multiple Boolean expressions. 
+// TODO: For the time being, it uses the ast_order to determine variable ordering
+// The output is a BDD with the target equations built into it
+pub fn build(bdd: &mut BDD, parser: &Parser) -> BDD {
+    for e in parser.exprs.iter() {
+
+    }
+
+    return BDD::new();
+}
+
+pub fn build_helper(mut bdd: BDD, eq: &Vec<Token>, order_map: &HashMap<char, isize>) -> BDD {
+    let mut op_stack: Vec<isize> = Vec::new();
+
+    for t in eq.iter() {
+        match t {
+            Token::VAR(c) => {
+                let var_num = order_map.get(c).unwrap().clone();
+                assert!(var_num > 0);
+                let node_id = bdd.make(var_num, -1, 1);
+                op_stack.push(node_id);
+            },
+            Token::OP(op) => {
+                if *op == Operator::NOT {
+                    let top = op_stack.get_mut(0).unwrap();
+                    *top = -(*top);
+                } else {
+                    let rhs = op_stack.pop().unwrap();
+                    let lhs = op_stack.pop().unwrap();
+                    let res = bdd.apply(*op, lhs, rhs);
+                    op_stack.push(res);
+                }
+            },
+            _ => panic!("Unexpected token while building BDD")
+
+        }
+    }
+
+    // TODO: What if there are multiple nodes left on the stack..?
+    if let Some(root) = op_stack.pop() {
+        bdd.roots.push(root);
+    } else {
+        panic!("No vertex left to assign as root");
+    }
+
+    // dbg!(&bdd.roots);
+
+    return bdd;
+
+}
 #[cfg(test)]
 mod test {
     use super::*;
@@ -344,8 +395,8 @@ mod test {
         expected.dead_count = 1;
 
         let actual_id = actual.apply(Operator::XOR, -2, 3);
-        dbg!(&expected);
-        dbg!(&actual);
+        // dbg!(&expected);
+        // dbg!(&actual);
         assert_eq!(expected, actual);
         assert!(4 == actual_id);
     }
@@ -369,10 +420,29 @@ mod test {
         expected.dead_count = 1;
 
         let actual_id = actual.apply(Operator::XOR, 2, 3);
-        dbg!(&expected);
-        dbg!(&actual);
+        // dbg!(&expected);
+        // dbg!(&actual);
         assert_eq!(expected, actual);
         assert!(-4 == actual_id);
+    }
+
+    #[test]
+    fn build_simple_test() {
+        let eq = vec![Token::VAR('a'), Token::VAR('b'), Token::OP(Operator::AND), Token::OP(Operator::NOT)];
+        let mut order: HashMap<char, isize> = HashMap::new();
+
+        order.insert('a', 1);
+        order.insert('b', 2);
+
+        let mut actual_bdd = BDD::new();
+
+        let mut expected_bdd = actual_bdd.clone();
+        let lhs = expected_bdd.make(1, -1, 1);
+        let rhs = expected_bdd.make(2, -1, 1);
+        expected_bdd.apply(Operator::AND, lhs, rhs);
+
+        actual_bdd = build_helper(actual_bdd, &eq, &order);
+        assert_eq!(actual_bdd, expected_bdd);
     }
 
 }
