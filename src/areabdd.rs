@@ -315,17 +315,33 @@ pub fn build_helper(mut bdd: BDD, eq: &Vec<Token>, order_map: &HashMap<char, isi
     }
 
     // TODO: What if there are multiple nodes left on the stack..?
-    if let Some(root) = op_stack.pop() {
+    if op_stack.len() != 1 {
+        let root = op_stack.pop().unwrap();
         bdd.roots.push(root);
     } else {
         panic!("No vertex left to assign as root");
     }
-
     // dbg!(&bdd.roots);
 
     return bdd;
-
 }
+
+pub fn satisfy_count(bdd: &BDD) -> usize {
+
+        
+
+    return 0;
+}
+
+fn count_helper(bdd: &BDD, vertex_id: isize, complemented: bool) -> usize {
+    if vertex_id.abs() == 1 {
+        if complemented { return 1; } else { return 0; }
+    } else {
+        let vertex = bdd.id_lookup.get(&vertex_id.abs()).unwrap();
+
+    }
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
