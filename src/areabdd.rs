@@ -3,7 +3,7 @@
 // Come up with ratio (maybe half?) for when region should be re-allocated and things reassigned
 // This may also be a good time to consider a BDD re-ordering? (If doing dynamic ordering)
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 use crate::parser::{Operator, Parser, Token};
 
@@ -15,9 +15,10 @@ pub struct BDD {
     vertex_lookup: HashMap<Rc<Vertex>, ID>,
     id_lookup: HashMap<ID, Rc<Vertex>>,
     ref_counts: HashMap<ID, usize>,
-    roots: Vec<Edge>,
+    roots: HashSet<Edge>,
     computed_cache: HashMap<Expr, Edge>,
     dead_count: usize,
+    ordering: HashMap<char, usize>
 }
 
 #[derive(Eq, PartialEq, Hash, Debug, Clone, Copy)]
@@ -40,6 +41,7 @@ impl BDD {
         let mut id_lookup: HashMap<ID, Rc<Vertex>> = HashMap::with_capacity(50); // Arbitrary
         let ref_counts: HashMap<ID, usize> = HashMap::with_capacity(50); // Arbitrary
         let computed_cache: HashMap<Expr, Edge> = HashMap::with_capacity(50); // Arbitrary
+        let ordering: HashMap<char, usize> = HashMap::with_capacity(5); // Arbitrary
 
         // A terminal node has a variable # 0 and no low or high children
         let terminal_true = Rc::new(Vertex {var: 0, lo: None, hi: None});
@@ -48,7 +50,7 @@ impl BDD {
         vertex_lookup.insert(Rc::clone(&terminal_true), 1);
         id_lookup.insert(1, terminal_true);
 
-        let roots = Vec::new();
+        let roots = HashSet::new();
 
         Self {
             vertex_lookup,
@@ -56,7 +58,8 @@ impl BDD {
             ref_counts,
             roots,
             computed_cache,
-            dead_count: 0
+            dead_count: 0,
+            ordering
         }
     }
 
@@ -199,6 +202,18 @@ impl BDD {
         }
     }
 
+    pub fn satisfy_count(&self, root: &isize) -> usize {
+        fn count_helper(acc: usize) -> usize {
+            
+            return 0;
+
+        }
+
+
+        return 0;
+
+    }
+
 }
 
 impl PartialEq for BDD {
@@ -279,15 +294,15 @@ fn dec_ref(bdd: &mut BDD, id: &isize) {
 // build takes as input a Parser with multiple Boolean expressions. 
 // TODO: For the time being, it uses the ast_order to determine variable ordering
 // The output is a BDD with the target equations built into it
-pub fn build(bdd: &mut BDD, parser: &Parser) -> BDD {
+pub fn build(bdd: BDD, parser: &Parser) -> BDD {
     for e in parser.exprs.iter() {
-
+        build_helper(bdd, &e.rpn, &parser.bdd_order);
     }
 
-    return BDD::new();
+    return bdd;
 }
 
-pub fn build_helper(mut bdd: BDD, eq: &Vec<Token>, order_map: &HashMap<char, isize>) -> BDD {
+fn build_helper(mut bdd: BDD, eq: &Vec<Token>, order_map: &HashMap<char, isize>) -> BDD {
     let mut op_stack: Vec<isize> = Vec::new();
 
     for t in eq.iter() {
@@ -338,6 +353,16 @@ fn count_helper(bdd: &BDD, vertex_id: isize, complemented: bool) -> usize {
         if complemented { return 1; } else { return 0; }
     } else {
         let vertex = bdd.id_lookup.get(&vertex_id.abs()).unwrap();
+        let lo_sat: usize = 2usize.pow(u32::try_from(vertex.lo.unwrap()).unwrap() - u32::try_from(vertex.var).unwrap() - 1);
+        let hi_sat: usize = 2usize.pow(u32::try_from(vertex.hi.unwrap()).unwrap() - u32::try_from(vertex.var).unwrap() - 1);
+
+        if vertex.lo.unwrap().abs() == 1 {
+            lo_sat = 2usize.pow()
+
+        }
+
+
+        return 0;
 
     }
 }
