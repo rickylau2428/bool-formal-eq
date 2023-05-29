@@ -1,5 +1,4 @@
 use linked_hash_map::LinkedHashMap;
-use std::collections::HashMap;
 
 static OPERATORS: [char; 7] = ['&', '|', '^', '!', '~', '(', ')'];
 
@@ -24,7 +23,7 @@ pub struct Parser {
     raw_exprs: Vec<String>,
     pub exprs: Vec<Tokenized>,
     pub ast_order: LinkedHashMap<char, usize>,
-    pub bdd_order: HashMap<char, isize>
+    // pub bdd_order: HashMap<char, isize>
     // pub bdd_order: LinkedHashMap<char, usize>
 }
 
@@ -67,13 +66,12 @@ impl Parser {
 pub fn create_session(raw_inputs: Vec<String>) -> Result<Parser, String> {
     let ast_order = LinkedHashMap::new();
     let exprs = Vec::with_capacity(raw_inputs.len());
-    let bdd_order = Vec::new();
+    // let bdd_order = Vec::new();
 
     let mut res = Parser {
         raw_exprs: Vec::with_capacity(raw_inputs.len()),
         exprs, 
-        ast_order,
-        bdd_order
+        ast_order
     };
 
     res.add_expr(raw_inputs)?;
